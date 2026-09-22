@@ -1,99 +1,94 @@
-# Spicy Pic TMA
+# Spicy Pic Mint — Telegram Mini App (TON)
 
-Production Telegram Mini App for minting and viewing the **Sexy Pics** NFT collection on TON. The UI is a static Next.js client. Mint signatures and private images go through Vercel Serverless Functions — no long polling.
+A static Telegram Mini App (Next.js pages router) for minting an NFT collection on TON,
+with two Vercel Serverless Functions for the parts that must stay server-side. No long
+polling anywhere — all on-chain reads are on-demand REST calls (TonCenter / TonAPI), and
+the mint transaction itself is broadcast by the user's wallet via TON Connect.
 
-## Stack
+## Structure
 
-- Next.js (App Router) + TypeScript
-- `@tonconnect/ui-react` for wallet connect
-- `@ton/core`, `@ton/crypto`, `@ton/ton` for cells and Ed25519 mint signatures
-- TonAPI for collection / ownership queries
-- `@twa-dev/sdk` for Telegram WebApp theme and viewport
-
-## Configure
-
-Local contract and metadata endpoints live in [`config.ts`](./config.ts):
-
-```ts
-export const APP_CONFIG = {
-  collectionAddress: "kQDeZQGgQXsn6UK785TT9LVe2MTLZGHEx5jLqE8oOrKMEBHA",
-  collectionMetadata: "https://astounding-flan-ffc457.netlify.app/collectionMetadata.json",
-  nftsMetadataIndex: "https://astounding-flan-ffc457.netlify.app/metadataIndex.json",
-  tonChain: "Testnet", // 'Testnet' | 'Mainnet'
-};
+```
+config.ts                          # APP_CONFIG (collection address, metadata URLs, chain)
+types/index.ts                     # Shared TS types
+lib/ton.ts                         # On-chain reads: minted-count per index, owned NFTs (TonAPI)
+lib/nft.ts                         # Client-side: fetch metadata index + per-item JSON, availability
+lib/signature.ts                   # Server-only: Ed25519 mint-authorization signing
+lib/mintTransaction.ts             # Client-side: builds the TonConnect SendTransactionRequest
+pages/index.tsx                    # App shell: header, TonConnect button, tab switch
+pages/_app.tsx                     # Telegram WebApp SDK init + theme variable bridge
+pages/api/generate-mint-signature.ts  # POST: signs a mint authorization
+pages/api/private-image-proxy.ts      # GET: streams gated Netlify images with Bearer auth
+components/*                       # BottomNav, MintFeed, NftCard, CountdownTimer,
+                                    # MyCollection, OwnedNftCard, TonConnectProvider
+public/tonconnect-manifest.json    # TON Connect manifest (update `url` before shipping)
 ```
 
-Set these **Vercel environment variables** (Production + Preview):
+## Environment variables (Vercel → Project → Settings → Environment Variables)
 
-| Variable | Purpose |
-| --- | --- |
-| `NETLIFY_PRIVATE_SECRET` | Bearer token for private Netlify image assets |
-| `AUTHENTICATION_SIGNATURE_PRIVATE_KEY` | Ed25519 secret used to sign mint authorizations |
-| `NEXT_PUBLIC_APP_URL` | Public HTTPS origin, e.g. `https://your-app.vercel.app` |
-| `TONAPI_KEY` | Optional TonAPI token for higher rate limits |
+| Name | Purpose |
+|---|---|
+| `NETLIFY_PRIVATE_SECRET` | Bearer token sent to Netlify when fetching `privateImage` assets. |
+| `AUTHENTICATION_SIGNATURE_PRIVATE_KEY` | Ed25519 signing key (32-byte seed or 64-byte secret key, hex or base64) used to sign mint authorizations. **Server-only — never prefix with `NEXT_PUBLIC_`.** |
 
-`AUTHENTICATION_SIGNATURE_PRIVATE_KEY` accepts:
+Copy `.env.example` → `.env.local` for local development.
 
-- 32-byte seed (hex or base64)
-- 64-byte NaCl secret key (hex or base64)
-- 24-word TON mnemonic
+## Important: align the signature/transaction format with your deployed contract
 
-The matching **public key** must already be stored in the collection contract.
+`lib/signature.ts` (server) and `lib/mintTransaction.ts` (client) define a **reference**
+cell layout for the mint-authorization message:
 
-## Mint signature payload
-
-`POST /api/generate-mint-signature`
-
-```json
-{
-  "metadataUrl": "https://astounding-flan-ffc457.netlify.app/nft/001/metadata.json",
-  "walletAddress": "EQ...",
-  "itemIndex": 0
-}
+```
+collection_address : MsgAddress
+item_index          : uint64
+recipient_address   : MsgAddress
+sha256(metadata_url) : 32 bytes
+expires_at           : uint32
 ```
 
-Unsigned cell (Ed25519 over `cell.hash()`):
+signed as the cell's standard hash with Ed25519, and forwarded on-chain as:
 
-- `valid_until:uint64`
-- `item_index:uint64` (index in `nftsMetadataIndex`)
-- `item_value:coins`
-- `nft_message:^(owner content:^offchain_uri)`
-- `forward_amount:coins`
+```
+op::authorized_mint (uint32) | query_id (uint64) | item_index (uint64)
+| recipient_address | expires_at (uint32) | signature (64 bytes)
+```
 
-Message body sent to `APP_CONFIG.collectionAddress`:
+**This must match the actual FunC/Tact contract's expected message body and signed
+payload exactly**, or the contract will reject the signature. Update both files together
+if your contract's ABI differs (field order, types, op-code, or whether the full signed
+cell is forwarded vs. just its hash).
 
-- `op:uint32 = 25`
-- `query_id:uint64`
-- `signature:bits512`
-- unsigned payload
+The public key corresponding to `AUTHENTICATION_SIGNATURE_PRIVATE_KEY` must be the one
+hard-coded/configured in the collection contract as the authorized minting signer.
 
-If your on-chain opcode/layout differs, update `src/lib/mint-payload.ts` to match the contract. NFT metadata stays off-chain; the item content points at the JSON URL.
+## Minted-count / availability model
 
-Value attached to the transaction is `mintingPrice + 0.08 TON` gas. If metadata omits `mintingPrice`, the app uses `1 TON`. Window fields: `mintStartDate` / `mintEndDate`, or `mintDeadline` as the end time.
+`lib/ton.ts` derives each item's deterministic address via the collection's
+`get_nft_address_by_index` get-method and treats "contract deployed" as "minted". This
+matches the common 1-of-1-per-index NFT collection pattern. If your collection allows
+`maxSupply > 1` per metadata index, replace `getMintedStatusForIndexes` with a call into
+your contract's actual per-index supply counter (or an indexer) instead.
 
-## Private images
-
-Owned items load `privateImage` through:
-
-`/api/private-image-proxy?url=...`
-
-The function allowlists the Netlify host, adds `Authorization: Bearer NETLIFY_PRIVATE_SECRET`, and streams the bytes back. **Save Image** draws the result to a canvas and triggers a JPEG download (or the Web Share sheet on supported devices).
-
-## Local run
+## Local development
 
 ```bash
-cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Wallet connect in Telegram requires the deployed HTTPS URL.
+Open the app outside Telegram to develop against the CSS fallback theme; the
+`@twa-dev/sdk` calls in `pages/_app.tsx` no-op gracefully when not running inside Telegram.
 
-## Deploy on Vercel
+## Deploying to Vercel
 
-1. Import this repo in Vercel.
-2. Add the environment variables above.
-3. Deploy (framework: Next.js).
-4. In [@BotFather](https://t.me/BotFather), set the Mini App URL to your Vercel domain.
+1. Push this repo to GitHub/GitLab/Bitbucket and import it in Vercel, or run `vercel`.
+2. Set the two environment variables above in the Vercel dashboard.
+3. After the first deploy, update `public/tonconnect-manifest.json`'s `url` (and
+   `iconUrl`) to your real `https://<project>.vercel.app` domain, then redeploy.
+4. Register the deployed URL as your Telegram Bot's Mini App URL via @BotFather
+   (`/newapp` or `/editapp`).
 
-There is no `output: export` because `/api/*` must stay as serverless functions. The home page is still a client-rendered Mini App with no websocket / long-poll workers.
+## Switching networks
+
+Flip `APP_CONFIG.tonChain` in `config.ts` between `"Testnet"` and `"Mainnet"`. This
+automatically repoints TonCenter RPC and TonAPI endpoints (`TON_ENDPOINTS` in the same
+file) and the TON Connect network used for transactions.

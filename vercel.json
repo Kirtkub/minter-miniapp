@@ -1,4 +1,11 @@
 {
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "functions": {
+    "pages/api/generate-mint-signature.ts": {
+      "maxDuration": 10
+    },
+    "pages/api/private-image-proxy.ts": {
+      "maxDuration": 15
+    }
+  }
 }

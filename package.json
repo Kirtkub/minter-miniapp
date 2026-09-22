@@ -1,32 +1,32 @@
 {
-  "name": "spicy-pic-tma",
-  "version": "0.1.0",
+  "name": "telegram-mint-tma",
+  "version": "1.0.0",
   "private": true,
+  "description": "Production-ready static Telegram Mini App for minting TON NFTs, deployed on Vercel (serverless functions, no long polling).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@ton/core": "^0.63.1",
-    "@ton/crypto": "^3.3.0",
-    "@ton/ton": "^16.3.0",
-    "@tonconnect/ui-react": "^3.0.2",
-    "@twa-dev/sdk": "^8.0.2",
-    "next": "^16.3.6",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "@ton/core": "^0.56.3",
+    "@ton/crypto": "^3.2.0",
+    "@ton/ton": "^13.11.1",
+    "@tonconnect/ui-react": "^2.0.9",
+    "@twa-dev/sdk": "^7.10.1",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20.19.43",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@types/node": "^20.14.9",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
