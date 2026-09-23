@@ -12,6 +12,19 @@ import {
 } from "@ton/core";
 import { getSecureRandomBytes, keyPairFromSeed } from "@ton/crypto";
 import { NftCollection } from "../../contracts/output/NftCollection_NftCollection";
+import JSZip from "jszip";
+
+// Raw source/build artifacts of the deployed contract, embedded into the
+// bundle at build time (see esbuild "loader" config in scripts/build-web.mjs)
+// so the "download deployed code" feature works with zero extra network
+// requests and always matches exactly what was compiled into this build.
+import nftCollectionTactSource from "../../contracts/nft_collection.tact";
+import nftItemTactSource from "../../contracts/nft_item.tact";
+import messagesTactSource from "../../contracts/messages.tact";
+import collectionAbiJson from "../../contracts/output/NftCollection_NftCollection.abi";
+import itemAbiJson from "../../contracts/output/NftCollection_NftItem.abi";
+import collectionCodeBoc from "../../contracts/output/NftCollection_NftCollection.code.boc";
+import itemCodeBoc from "../../contracts/output/NftCollection_NftItem.code.boc";
 
 declare global {
   interface Window {
@@ -95,7 +108,7 @@ async function generateKeyPair() {
 let tonConnectUI: any = null;
 
 function initTonConnect() {
-  const manifestUrl = new URL("/tonconnect-manifest.json", window.location.href).toString();
+  const manifestUrl = new URL("/deploycollection/tonconnect-manifest.json", window.location.href).toString();
   tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
     manifestUrl,
     buttonRootId: "ton-connect-button",
@@ -240,6 +253,7 @@ async function pollForActivation(friendlyAddress: string) {
         setText("final-address", friendlyAddress);
         (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
         show("deploy-success");
+        downloadDeployedCode().catch((err) => console.error("code_download_failed", err));
         return;
       }
       setText(
@@ -257,6 +271,62 @@ async function pollForActivation(friendlyAddress: string) {
   setText("final-address", friendlyAddress);
   (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
   show("deploy-success");
+  downloadDeployedCode().catch((err) => console.error("code_download_failed", err));
+}
+
+// --- Step 6: download the deployed code -------------------------------------
+// Bundles the Tact source, the compiled contract output and the exact
+// deploy parameters into a single .zip and triggers a browser download.
+// Everything needed is already embedded in this bundle at build time, so no
+// network request is made and the archive always matches what was deployed.
+
+async function downloadDeployedCode() {
+  if (!state.prepared) return;
+
+  const friendlyAddress = state.prepared.address.toString({ testOnly: state.network === "testnet" });
+  const zip = new JSZip();
+
+  const contracts = zip.folder("contracts")!;
+  contracts.file("nft_collection.tact", nftCollectionTactSource as string);
+  contracts.file("nft_item.tact", nftItemTactSource as string);
+  contracts.file("messages.tact", messagesTactSource as string);
+
+  const output = contracts.folder("output")!;
+  output.file("NftCollection_NftCollection.abi", collectionAbiJson as string);
+  output.file("NftCollection_NftItem.abi", itemAbiJson as string);
+  output.file("NftCollection_NftCollection.code.boc", collectionCodeBoc as Uint8Array);
+  output.file("NftCollection_NftItem.code.boc", itemCodeBoc as Uint8Array);
+
+  const deploymentInfo = {
+    deployedAt: new Date().toISOString(),
+    network: state.network,
+    collectionAddress: friendlyAddress,
+    owner: state.connectedAddress ? formatAddressPreview(state.connectedAddress) : null,
+    authPublicKeyHex: state.publicKeyHex,
+    authPrivateKeyHex: state.secretKeyHex,
+    collectionMetadataUrl: el<HTMLInputElement>("collection-metadata-url").value.trim(),
+    metadataIndexUrl: el<HTMLInputElement>("metadata-index-url").value.trim(),
+  };
+  zip.file("deployment-info.json", JSON.stringify(deploymentInfo, null, 2));
+  zip.file(
+    "LEGGIMI.txt",
+    "Questo archivio contiene il codice sorgente Tact e i pacchetti compilati\n" +
+      "dello smart contract della collezione NFT appena deployata su TON, insieme\n" +
+      "ai parametri usati per il deploy (deployment-info.json).\n\n" +
+      "ATTENZIONE: deployment-info.json contiene anche la chiave privata Ed25519\n" +
+      "(authPrivateKeyHex) usata dal backend per autorizzare il minting.\n" +
+      "Conservala in un posto sicuro e non condividerla con nessuno.\n",
+  );
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `nft-collection-${friendlyAddress.slice(0, 10)}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // --- Wire up -----------------------------------------------------------------
@@ -278,4 +348,7 @@ window.addEventListener("DOMContentLoaded", () => {
   el("copy-final-address").addEventListener("click", () =>
     copy(el("final-address").textContent ?? "", "copy-final-feedback"),
   );
+  el("download-code-button").addEventListener("click", () => {
+    downloadDeployedCode().catch((err) => alert("Errore nella creazione dell'archivio: " + err.message));
+  });
 });

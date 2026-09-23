@@ -16,6 +16,14 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
+// Paths with no matching static file that should fall back to a directory's
+// index.html, mirroring the rewrites configured in vercel.json.
+const HTML_FALLBACKS = {
+  "/": "/index.html",
+  "/deploycollection": "/deploycollection/index.html",
+  "/deploycollection/": "/deploycollection/index.html",
+};
+
 function responseAdapter(res) {
   res.status = (status) => {
     res.statusCode = status;
@@ -33,7 +41,7 @@ const server = createServer(async (req, res) => {
   if (requestPath === "/api/catalog") return catalogHandler(req, responseAdapter(res));
   if (requestPath === "/api/sign-mint") return signMintHandler(req, responseAdapter(res));
 
-  const relative = normalize(requestPath === "/" ? "/index.html" : requestPath);
+  const relative = normalize(HTML_FALLBACKS[requestPath] || requestPath);
   const filePath = join(root, relative);
   if (!filePath.startsWith(root)) {
     res.writeHead(403).end("Forbidden");
@@ -50,5 +58,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`TON minting app listening on ${port}`);
+  console.log(`NFT miniapp (mint + deploycollection) listening on ${port}`);
 });

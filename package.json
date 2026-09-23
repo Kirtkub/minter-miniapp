@@ -1,18 +1,21 @@
 {
-  "name": "ton-wallet-minting-mini-app",
+  "name": "ton-nft-miniapp",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:web",
-    "build:web": "node scripts/build-web.mjs",
+    "build": "node scripts/build-web.mjs",
+    "compile:contracts": "tact --config deploy-collection/tact.config.json",
     "dev": "node scripts/dev-server.mjs"
   },
   "dependencies": {
-    "@ton/core": "^0.63.1",
-    "buffer": "^6.0.3"
+    "@ton/core": "0.63.1",
+    "@ton/crypto": "3.3.0",
+    "buffer": "^6.0.3",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
+    "@tact-lang/compiler": "1.6.13",
     "esbuild": "^0.28.2"
   }
 }

@@ -1,5 +1,9 @@
 import { build } from "esbuild";
+import { mkdirSync } from "node:fs";
 
+mkdirSync("public/deploycollection", { recursive: true });
+
+// 1) Mint app — served at "/"
 await build({
   entryPoints: ["src/app.js"],
   bundle: true,
@@ -11,3 +15,27 @@ await build({
   sourcemap: false,
   inject: ["src/shims/buffer.js"],
 });
+console.log("Built mint app -> public/app.js");
+
+// 2) Collection deploy app — served at "/deploycollection"
+await build({
+  entryPoints: ["deploy-collection/web/src/app.ts"],
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: ["es2020"],
+  outfile: "public/deploycollection/app.js",
+  inject: ["deploy-collection/web/src/shims/buffer-shim.js"],
+  define: { global: "globalThis" },
+  minify: true,
+  logLevel: "info",
+  loader: {
+    // Contract source and build artifacts are embedded directly into the
+    // bundle so the "download deployed code" feature works offline and
+    // always matches exactly what was compiled.
+    ".tact": "text",
+    ".abi": "text",
+    ".boc": "binary",
+  },
+});
+console.log("Built deploy-collection app -> public/deploycollection/app.js");

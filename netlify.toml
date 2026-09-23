@@ -1,2 +1,13 @@
 [build]
+  command = "npm run build"
   publish = "public"
+
+[[redirects]]
+  from = "/deploycollection"
+  to = "/deploycollection/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/deploycollection/"
+  to = "/deploycollection/index.html"
+  status = 200

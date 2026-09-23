@@ -1,4 +1,8 @@
 {
-  "buildCommand": "npm run build:web",
-  "outputDirectory": "public"
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/deploycollection", "destination": "/deploycollection/index.html" },
+    { "source": "/deploycollection/", "destination": "/deploycollection/index.html" }
+  ]
 }

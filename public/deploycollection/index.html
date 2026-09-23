@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Deploy NFT Collection · TON</title>
-  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="/deploycollection/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/deploycollection/styles.css" />
   <script src="https://unpkg.com/@tonconnect/ui@2.0.10/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
@@ -101,13 +101,15 @@
         <div class="feedback" id="copy-final-feedback"></div>
         <div class="actions">
           <a id="final-explorer-link" class="explorer-link" href="#" target="_blank" rel="noopener">Apri su explorer</a>
+          <button class="secondary" id="download-code-button" type="button">Scarica il codice deployato (.zip)</button>
         </div>
+        <p class="hint">Il download parte automaticamente ed include il codice Tact sorgente, i file compilati e i parametri del deploy (indirizzo, chiavi, URL dei metadati).</p>
       </div>
     </section>
 
     <footer>Nessun dato di questa pagina viene salvato o inviato altrove: chiavi e indirizzi restano nel tuo browser.</footer>
   </div>
 
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/deploycollection/app.js"></script>
 </body>
 </html>
