@@ -63,7 +63,7 @@ di un file `.zip` che contiene:
 - `deployment-info.json` con indirizzo del contratto, owner, chiave
   pubblica/privata Ed25519 usata per autorizzare il minting e gli URL dei
   metadati usati per il deploy;
-- un `LEGGIMI.txt` con un avviso sulla chiave privata contenuta nell'archivio.
+- un `README.txt` con un avviso sulla chiave privata contenuta nell'archivio.
 
 È disponibile anche un pulsante "Scarica il codice deployato (.zip)" per
 riscaricare l'archivio in qualsiasi momento dopo il deploy, senza dover

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,20 +11,20 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Deploy NFT Collection su TON</h1>
-      <p>Contratto Tact (TEP-62 + TEP-66) con minting autorizzato via firma Ed25519. Tutto avviene nel tuo browser: nessun dato lascia questa pagina.</p>
+      <h1>Deploy NFT Collection on TON</h1>
+      <p>Tact contract (TEP-62 + TEP-66) with minting authorized via Ed25519 signature. Everything happens in your browser: no data leaves this page.</p>
     </header>
 
     <section class="card">
-      <h2><span class="step">1</span> Chiave di autenticazione</h2>
-      <p class="hint">Genera la coppia di chiavi Ed25519 usata dal contratto per autorizzare il minting. La chiave pubblica viene salvata nel contratto al deploy; la chiave privata resta solo qui, nel tuo browser.</p>
-      <button id="generate-keys-button" type="button">Genera coppia di chiavi</button>
+      <h2><span class="step">1</span> Authentication key</h2>
+      <p class="hint">Generate the Ed25519 key pair the contract uses to authorize minting. The public key is stored in the contract at deploy time; the private key stays only here, in your browser.</p>
+      <button id="generate-keys-button" type="button">Generate key pair</button>
 
       <div id="key-output" class="hidden">
         <div class="key-row">
           <div class="label-line">
             <label style="margin:0">AUTHENTICATION_SIGNATURE_PUBLIC_KEY</label>
-            <button class="secondary" id="copy-public-key" type="button">Copia</button>
+            <button class="secondary" id="copy-public-key" type="button">Copy</button>
           </div>
           <code id="public-key-value" class="value-box"></code>
           <div class="feedback" id="copy-public-feedback"></div>
@@ -32,29 +32,29 @@
         <div class="key-row">
           <div class="label-line">
             <label style="margin:0">AUTHENTICATION_SIGNATURE_PRIVATE_KEY</label>
-            <button class="secondary" id="copy-private-key" type="button">Copia</button>
+            <button class="secondary" id="copy-private-key" type="button">Copy</button>
           </div>
           <code id="private-key-value" class="value-box"></code>
           <div class="feedback" id="copy-private-feedback"></div>
         </div>
-        <p class="warning">Salva subito la chiave privata in un posto sicuro: serve alla tua app off-chain per firmare le richieste di minting. Se lasci questa pagina, andrà persa.</p>
+        <p class="warning">Save the private key somewhere safe right away: your off-chain backend needs it to sign minting requests. If you leave this page, it will be lost.</p>
       </div>
     </section>
 
     <section class="card">
-      <h2><span class="step">2</span> Parametri della collezione</h2>
-      <p class="hint">Gli URL possono restare quelli di default (modificabili anche dopo il deploy semplicemente aggiornando i file su Netlify) oppure essere personalizzati ora.</p>
+      <h2><span class="step">2</span> Collection parameters</h2>
+      <p class="hint">The URLs can stay at their defaults (still editable after deploy by simply updating the files on Netlify) or be customized now.</p>
 
-      <label for="collection-metadata-url">URL metadati della collezione</label>
+      <label for="collection-metadata-url">Collection metadata URL</label>
       <input type="text" id="collection-metadata-url" value="https://astounding-flan-ffc457.netlify.app/collectionMetadata.json" />
 
-      <label for="metadata-index-url">URL indice metadati NFT (metadataIndex.json)</label>
+      <label for="metadata-index-url">NFT metadata index URL (metadataIndex.json)</label>
       <input type="text" id="metadata-index-url" value="https://astounding-flan-ffc457.netlify.app/metadataIndex.json" />
 
-      <label for="royalty-address">Indirizzo destinatario royalty (opzionale)</label>
-      <input type="text" id="royalty-address" placeholder="Lascia vuoto per usare il wallet collegato" />
+      <label for="royalty-address">Royalty recipient address (optional)</label>
+      <input type="text" id="royalty-address" placeholder="Leave empty to use the connected wallet" />
 
-      <label for="network-select">Rete TON</label>
+      <label for="network-select">TON network</label>
       <select id="network-select">
         <option value="testnet" selected>Testnet</option>
         <option value="mainnet">Mainnet</option>
@@ -62,29 +62,29 @@
     </section>
 
     <section class="card">
-      <h2><span class="step">3</span> Collega il wallet</h2>
-      <p class="hint">Il wallet collegato diventa il proprietario della collezione e il destinatario predefinito delle royalty. Scansiona il QR con il tuo wallet TON per collegarlo.</p>
+      <h2><span class="step">3</span> Connect your wallet</h2>
+      <p class="hint">The connected wallet becomes the collection owner and the default royalty recipient. Scan the QR code with your TON wallet to connect it.</p>
       <div id="ton-connect-button"></div>
       <div id="wallet-connected" class="hidden" style="margin-top:12px">
-        Wallet collegato: <code id="connected-address-value" class="value-box"></code>
+        Connected wallet: <code id="connected-address-value" class="value-box"></code>
       </div>
     </section>
 
     <section class="card">
-      <h2><span class="step">4</span> Calcola indirizzo e deploya</h2>
-      <p class="hint">L'indirizzo del contratto è deterministico: viene calcolato localmente da codice, parametri e chiave pubblica, prima ancora di inviare qualsiasi transazione.</p>
-      <button id="prepare-button" type="button" disabled>Calcola indirizzo e prepara il deploy</button>
+      <h2><span class="step">4</span> Compute address and deploy</h2>
+      <p class="hint">The contract address is deterministic: it is computed locally from the code, the parameters and the public key, before any transaction is sent.</p>
+      <button id="prepare-button" type="button" disabled>Compute address and prepare deploy</button>
 
       <div id="deploy-preview" class="hidden">
         <ul class="preview-list">
-          <li><span class="k">Indirizzo previsto</span><span class="v" id="preview-address"></span></li>
+          <li><span class="k">Predicted address</span><span class="v" id="preview-address"></span></li>
           <li><span class="k">Owner</span><span class="v" id="preview-owner"></span></li>
           <li><span class="k">Royalty (TEP-66)</span><span class="v" id="preview-royalty"></span></li>
-          <li><span class="k">Metadati collezione</span><span class="v" id="preview-collection-url"></span></li>
-          <li><span class="k">Indice metadati NFT</span><span class="v" id="preview-index-url"></span></li>
-          <li><span class="k">Chiave pubblica auth</span><span class="v" id="preview-pubkey"></span></li>
+          <li><span class="k">Collection metadata</span><span class="v" id="preview-collection-url"></span></li>
+          <li><span class="k">NFT metadata index</span><span class="v" id="preview-index-url"></span></li>
+          <li><span class="k">Auth public key</span><span class="v" id="preview-pubkey"></span></li>
         </ul>
-        <button id="deploy-button" type="button" disabled>Deploya la collezione</button>
+        <button id="deploy-button" type="button" disabled>Deploy the collection</button>
       </div>
 
       <div id="deploy-status-box" class="hidden">
@@ -92,22 +92,22 @@
       </div>
 
       <div id="deploy-success" class="hidden">
-        <h3>Collezione deployata</h3>
+        <h3>Collection deployed</h3>
         <div class="label-line">
-          <label style="margin:0">Indirizzo dello smart contract</label>
-          <button class="secondary" id="copy-final-address" type="button">Copia</button>
+          <label style="margin:0">Smart contract address</label>
+          <button class="secondary" id="copy-final-address" type="button">Copy</button>
         </div>
         <code id="final-address" class="value-box"></code>
         <div class="feedback" id="copy-final-feedback"></div>
         <div class="actions">
-          <a id="final-explorer-link" class="explorer-link" href="#" target="_blank" rel="noopener">Apri su explorer</a>
-          <button class="secondary" id="download-code-button" type="button">Scarica il codice deployato (.zip)</button>
+          <a id="final-explorer-link" class="explorer-link" href="#" target="_blank" rel="noopener">Open in explorer</a>
+          <button class="secondary" id="download-code-button" type="button">Download deployed code (.zip)</button>
         </div>
-        <p class="hint">Il download parte automaticamente ed include il codice Tact sorgente, i file compilati e i parametri del deploy (indirizzo, chiavi, URL dei metadati).</p>
+        <p class="hint">The download starts automatically and includes the Tact source code, the compiled files and the deploy parameters (address, keys, metadata URLs).</p>
       </div>
     </section>
 
-    <footer>Nessun dato di questa pagina viene salvato o inviato altrove: chiavi e indirizzi restano nel tuo browser.</footer>
+    <footer>No data from this page is ever saved or sent elsewhere: keys and addresses stay in your browser.</footer>
   </div>
 
   <script type="module" src="/deploycollection/app.js"></script>

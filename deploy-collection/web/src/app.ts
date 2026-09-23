@@ -85,7 +85,7 @@ function hexToBigInt(hex: string): bigint {
 async function copy(text: string, feedbackId: string) {
   await navigator.clipboard.writeText(text);
   const node = el(feedbackId);
-  node.textContent = "Copiato!";
+  node.textContent = "Copied!";
   setTimeout(() => (node.textContent = ""), 1500);
 }
 
@@ -155,15 +155,15 @@ async function prepareDeploy() {
   state.network = readNetwork();
 
   if (!state.publicKeyHex) {
-    alert("Genera prima la coppia di chiavi Ed25519.");
+    alert("Generate the Ed25519 key pair first.");
     return;
   }
   if (!state.connectedAddress) {
-    alert("Collega prima il tuo wallet TON.");
+    alert("Connect your TON wallet first.");
     return;
   }
   if (!collectionMetadataUrl || !metadataIndexUrl) {
-    alert("Inserisci entrambi gli URL dei metadati.");
+    alert("Enter both metadata URLs.");
     return;
   }
 
@@ -210,7 +210,7 @@ async function deploy() {
     bounceable: true,
   });
 
-  setText("deploy-status", "In attesa della firma nel tuo wallet...");
+  setText("deploy-status", "Waiting for the signature in your wallet...");
   show("deploy-status-box");
 
   try {
@@ -225,11 +225,11 @@ async function deploy() {
       ],
     });
   } catch (err: any) {
-    setText("deploy-status", "Deploy annullato o non riuscito: " + (err?.message ?? String(err)));
+    setText("deploy-status", "Deploy cancelled or failed: " + (err?.message ?? String(err)));
     return;
   }
 
-  setText("deploy-status", "Transazione inviata. In attesa della conferma on-chain...");
+  setText("deploy-status", "Transaction sent. Waiting for on-chain confirmation...");
   await pollForActivation(friendlyAddress);
 }
 
@@ -249,7 +249,7 @@ async function pollForActivation(friendlyAddress: string) {
       );
       const json = await res.json();
       if (json?.result?.state === "active") {
-        setText("deploy-status", "Collezione deployata con successo!");
+        setText("deploy-status", "Collection deployed successfully!");
         setText("final-address", friendlyAddress);
         (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
         show("deploy-success");
@@ -258,7 +258,7 @@ async function pollForActivation(friendlyAddress: string) {
       }
       setText(
         "deploy-status",
-        `In attesa della conferma on-chain... (tentativo ${attempt + 1}/30)`,
+        `Waiting for on-chain confirmation... (attempt ${attempt + 1}/30)`,
       );
     } catch {
       // transient network error while polling; keep trying
@@ -266,7 +266,7 @@ async function pollForActivation(friendlyAddress: string) {
   }
   setText(
     "deploy-status",
-    "Non è stato possibile confermare automaticamente il deploy. Verifica l'indirizzo sull'explorer.",
+    "Could not automatically confirm the deploy. Check the address on the explorer.",
   );
   setText("final-address", friendlyAddress);
   (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
@@ -309,13 +309,13 @@ async function downloadDeployedCode() {
   };
   zip.file("deployment-info.json", JSON.stringify(deploymentInfo, null, 2));
   zip.file(
-    "LEGGIMI.txt",
-    "Questo archivio contiene il codice sorgente Tact e i pacchetti compilati\n" +
-      "dello smart contract della collezione NFT appena deployata su TON, insieme\n" +
-      "ai parametri usati per il deploy (deployment-info.json).\n\n" +
-      "ATTENZIONE: deployment-info.json contiene anche la chiave privata Ed25519\n" +
-      "(authPrivateKeyHex) usata dal backend per autorizzare il minting.\n" +
-      "Conservala in un posto sicuro e non condividerla con nessuno.\n",
+    "README.txt",
+    "This archive contains the Tact source code and the compiled packages\n" +
+      "of the NFT collection smart contract you just deployed on TON, along\n" +
+      "with the parameters used for the deploy (deployment-info.json).\n\n" +
+      "WARNING: deployment-info.json also contains the Ed25519 private key\n" +
+      "(authPrivateKeyHex) used by the backend to authorize minting.\n" +
+      "Keep it somewhere safe and never share it with anyone.\n",
   );
 
   const blob = await zip.generateAsync({ type: "blob" });
@@ -335,20 +335,20 @@ window.addEventListener("DOMContentLoaded", () => {
   initTonConnect();
 
   el("generate-keys-button").addEventListener("click", () => {
-    generateKeyPair().catch((err) => alert("Errore nella generazione delle chiavi: " + err.message));
+    generateKeyPair().catch((err) => alert("Error generating the keys: " + err.message));
   });
   el("copy-public-key").addEventListener("click", () => copy(state.publicKeyHex ?? "", "copy-public-feedback"));
   el("copy-private-key").addEventListener("click", () => copy(state.secretKeyHex ?? "", "copy-private-feedback"));
   el("prepare-button").addEventListener("click", () => {
-    prepareDeploy().catch((err) => alert("Errore nella preparazione del deploy: " + err.message));
+    prepareDeploy().catch((err) => alert("Error preparing the deploy: " + err.message));
   });
   el("deploy-button").addEventListener("click", () => {
-    deploy().catch((err) => alert("Errore durante il deploy: " + err.message));
+    deploy().catch((err) => alert("Error during deploy: " + err.message));
   });
   el("copy-final-address").addEventListener("click", () =>
     copy(el("final-address").textContent ?? "", "copy-final-feedback"),
   );
   el("download-code-button").addEventListener("click", () => {
-    downloadDeployedCode().catch((err) => alert("Errore nella creazione dell'archivio: " + err.message));
+    downloadDeployedCode().catch((err) => alert("Error creating the archive: " + err.message));
   });
 });

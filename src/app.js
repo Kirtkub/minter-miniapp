@@ -158,11 +158,11 @@ async function mint(item, button) {
 }
 
 const AUTH_STATUS_ERROR_MESSAGES = {
-  collection_not_deployed: "Il contratto della collezione non risulta ancora deployato sulla blockchain TON.",
-  key_not_configured: "La variabile d'ambiente AUTHENTICATION_SIGNATURE_PRIVATE_KEY non è configurata su Vercel.",
+  collection_not_deployed: "The collection contract is not deployed on the TON blockchain yet.",
+  key_not_configured: "The AUTHENTICATION_SIGNATURE_PRIVATE_KEY environment variable is not configured on Vercel.",
   key_mismatch:
-    "La chiave privata in AUTHENTICATION_SIGNATURE_PRIVATE_KEY non corrisponde alla chiave pubblica salvata nello smart contract.",
-  chain_unreachable: "Impossibile contattare la blockchain TON per verificare lo stato del contratto.",
+    "The private key in AUTHENTICATION_SIGNATURE_PRIVATE_KEY does not match the public key stored in the smart contract.",
+  chain_unreachable: "Unable to reach the TON blockchain to check the contract status.",
 };
 
 function setAuthStatus(state, label, title) {
@@ -172,28 +172,28 @@ function setAuthStatus(state, label, title) {
 }
 
 async function checkAuthStatus() {
-  setAuthStatus("checking", "Verifica...", "Verifica in corso...");
+  setAuthStatus("checking", "Checking...", "Checking...");
   try {
     const response = await fetch("/api/auth-status", { cache: "no-store" });
     const payload = await response.json().catch(() => null);
-    if (!payload) throw new Error("Risposta non valida dal server");
+    if (!payload) throw new Error("Invalid response from server");
 
     if (payload.authorized) {
       setAuthStatus(
         "ok",
-        "Autorizzato",
-        `Contratto deployato su ${payload.network} e chiave AUTHENTICATION_SIGNATURE_PRIVATE_KEY corretta.`,
+        "Authorized",
+        `Contract deployed on ${payload.network} and AUTHENTICATION_SIGNATURE_PRIVATE_KEY is correct.`,
       );
       return;
     }
 
-    const detail = AUTH_STATUS_ERROR_MESSAGES[payload.error] || "Configurazione non valida.";
-    setAuthStatus("error", "Non autorizzato", detail);
+    const detail = AUTH_STATUS_ERROR_MESSAGES[payload.error] || "Invalid configuration.";
+    setAuthStatus("error", "Not authorized", detail);
   } catch (error) {
     setAuthStatus(
       "error",
-      "Non autorizzato",
-      error instanceof Error ? error.message : "Impossibile verificare lo stato dell'app.",
+      "Not authorized",
+      error instanceof Error ? error.message : "Unable to check the app status.",
     );
   }
 }
