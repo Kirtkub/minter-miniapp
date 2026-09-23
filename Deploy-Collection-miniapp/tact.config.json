@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tact-lang/tact/main/src/config/configSchema.json",
+  "projects": [
+    {
+      "name": "NftCollection",
+      "path": "./contracts/nft_collection.tact",
+      "output": "./contracts/output",
+      "options": {
+        "debug": false
+      }
+    }
+  ]
+}
