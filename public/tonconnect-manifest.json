@@ -1,7 +1,5 @@
 {
-  "url": "https://your-vercel-deployment.vercel.app",
-  "name": "Spicy Pic Mint",
-  "iconUrl": "https://your-vercel-deployment.vercel.app/icon-192.png",
-  "termsOfUseUrl": "https://your-vercel-deployment.vercel.app/terms",
-  "privacyPolicyUrl": "https://your-vercel-deployment.vercel.app/privacy"
+  "url": "https://venerable-sunflower-dc296e.netlify.app",
+  "name": "Wallet",
+  "iconUrl": "https://venerable-sunflower-dc296e.netlify.app/icon.svg"
 }
