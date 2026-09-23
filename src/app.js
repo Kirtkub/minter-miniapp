@@ -107,7 +107,7 @@ function buildMintBody(mint) {
     .storeStringRefTail(mint.contentUrl)
     .storeAddress(Address.parse(mint.newOwner))
     .storeUint(BigInt(mint.validUntil), 32)
-    .storeSlice(signature.beginParse())
+    .storeRef(signature)
     .endCell()
     .toBoc()
     .toString("base64");

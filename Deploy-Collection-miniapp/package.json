@@ -1,0 +1,19 @@
+{
+  "name": "ton-nft-collection-deployer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "tact --config tact.config.json",
+    "build:web": "node scripts/build-web.mjs"
+  },
+  "dependencies": {
+    "@ton/core": "0.63.1",
+    "@ton/crypto": "3.3.0",
+    "buffer": "^6.0.3"
+  },
+  "devDependencies": {
+    "@tact-lang/compiler": "1.6.13",
+    "esbuild": "^0.28.2"
+  }
+}
