@@ -74,13 +74,31 @@ i file compilati sono già inclusi nel bundle a tempo di build (tramite i
 loader `text`/`binary` di esbuild), quindi non serve alcuna richiesta di
 rete per costruirlo.
 
-## Da aggiornare prima del deploy in produzione
+## Dominio configurato
 
-- `public/tonconnect-manifest.json` e
-  `public/deploycollection/tonconnect-manifest.json`: il campo `url` /
-  `iconUrl` deve puntare al dominio Vercel reale del progetto (es.
-  `https://<il-tuo-progetto>.vercel.app` e
-  `https://<il-tuo-progetto>.vercel.app/deploycollection`).
-- `src/config.js`: indirizzo della collezione e URL dei metadati usati
-  dalla miniapp di minting, da aggiornare con quelli della collezione
-  effettivamente deployata tramite `/deploycollection`.
+I manifest TonConnect sono già impostati sul dominio di produzione
+`https://minter-miniapp.vercel.app`:
+
+- `public/tonconnect-manifest.json` → `url`/`iconUrl` sul dominio root.
+- `public/deploycollection/tonconnect-manifest.json` → `url`/`iconUrl` su
+  `https://minter-miniapp.vercel.app/deploycollection`.
+
+Se in futuro cambi dominio Vercel, aggiorna questi due file di conseguenza.
+
+## Da aggiornare dopo il deploy della collezione
+
+`src/config.js` (usato dalla miniapp di minting in `/`) punta ancora a un
+sito Netlify di test per l'indirizzo della collezione e i metadati:
+
+```js
+export const collectionAddress = "kQB2njpo7QGmTd0RmjeAwtRsKgjARp7XYeagI2MXfjVwdty9";
+export const collectionMetadata = "https://astounding-flan-ffc457.netlify.app/collectionMetadata.json";
+export const nftsMetadataIndex = "https://astounding-flan-ffc457.netlify.app/metadataIndex.json";
+export const tonChain = "Testnet";
+```
+
+Dopo aver deployato la collezione reale da `/deploycollection` (i valori
+`collectionAddress`, `collectionMetadata` e `nftsMetadataIndex` sono
+disponibili nel riepilogo a schermo e nello `.zip` scaricato), aggiorna
+questi tre valori con quelli della tua collezione effettiva e imposta
+`tonChain` su `"Mainnet"` quando passi in produzione.
