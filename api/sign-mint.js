@@ -75,6 +75,17 @@ function signedDataCell({ metadataIndex, contentUrl, newOwner, validUntil, nextI
     .endCell();
 }
 
+function hashSliceData(cell) {
+  const byteLength = Math.ceil(cell.bits.length / 8);
+  const data = Buffer.alloc(byteLength);
+  for (let bitIndex = 0; bitIndex < cell.bits.length; bitIndex += 1) {
+    if (cell.bits.at(bitIndex)) data[bitIndex >> 3] |= 1 << (7 - (bitIndex % 8));
+  }
+  const paddingBit = cell.bits.length;
+  data[paddingBit >> 3] |= 1 << (7 - (paddingBit % 8));
+  return createHash("sha256").update(data).digest();
+}
+
 function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemIndex, privateKey }) {
   const signedData = signedDataCell({
     metadataIndex,
@@ -83,7 +94,7 @@ function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemInd
     validUntil,
     nextItemIndex,
   });
-  const digest = signedData.hash();
+  const digest = hashSliceData(signedData);
   const contractDigest = createHash("sha256").update(digest).digest();
   return sign(null, contractDigest, privateKey).toString("hex");
 }

@@ -160,10 +160,6 @@ function initTelegram() {
   if (!tg) return;
   tg.ready();
   tg.expand();
-  try {
-    tg.setHeaderColor("#050505");
-    tg.setBackgroundColor("#050505");
-  } catch {}
 }
 
 function initWallet() {
