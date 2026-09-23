@@ -23094,6 +23094,7 @@
     }
     button.disabled = true;
     setStatus("Preparing transaction.");
+    let stage = "authorization";
     try {
       const authorizationResponse = await fetch("/api/sign-mint", {
         method: "POST",
@@ -23105,6 +23106,7 @@
       });
       const authorization = await authorizationResponse.json();
       if (!authorizationResponse.ok) throw new Error(authorization.error || "Mint authorization failed");
+      stage = "wallet transaction";
       await tonConnectUI.sendTransaction({
         validUntil: authorization.validUntil,
         messages: [
@@ -23118,7 +23120,12 @@
       setStatus("Transaction sent.");
       await loadCatalog();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Mint cancelled or failed.");
+      const message = error instanceof Error ? error.message : String(error);
+      const debugMessage = `Mint failed during ${stage}.
+
+${message}`;
+      setStatus(debugMessage);
+      window.alert(debugMessage);
     } finally {
       button.disabled = false;
     }

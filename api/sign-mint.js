@@ -78,7 +78,8 @@ function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemInd
     nextItemIndex,
   });
   const digest = signedData.hash();
-  return sign(null, digest, privateKeyFromEnvironment()).toString("hex");
+  const contractDigest = createHash("sha256").update(digest).digest();
+  return sign(null, contractDigest, privateKeyFromEnvironment()).toString("hex");
 }
 
 async function getMintingItem(metadataIndex) {
