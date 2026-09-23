@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import catalogHandler from "../api/catalog.js";
 import signMintHandler from "../api/sign-mint.js";
+import authStatusHandler from "../api/auth-status.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
 const port = Number(process.env.PORT || 5000);
@@ -40,6 +41,7 @@ const server = createServer(async (req, res) => {
   const requestPath = decodeURIComponent((req.url || "/").split("?")[0]);
   if (requestPath === "/api/catalog") return catalogHandler(req, responseAdapter(res));
   if (requestPath === "/api/sign-mint") return signMintHandler(req, responseAdapter(res));
+  if (requestPath === "/api/auth-status") return authStatusHandler(req, responseAdapter(res));
 
   const relative = normalize(HTML_FALLBACKS[requestPath] || requestPath);
   const filePath = join(root, relative);

@@ -36,6 +36,25 @@
     }
     #wallet-btn:active, .mint-button:active { background: #1c1c1c; }
     #wallet-btn.connected { color: #fff; border-color: #454545; }
+    #auth-status-btn {
+      position: fixed;
+      top: max(12px, env(safe-area-inset-top));
+      left: max(12px, env(safe-area-inset-left));
+      padding: 10px 16px;
+      font-size: 13px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    #auth-status-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: #6a6a6a; flex: none; }
+    #auth-status-btn[data-state="checking"] .dot { background: #6a6a6a; }
+    #auth-status-btn[data-state="ok"] { border-color: #2f8f5f; }
+    #auth-status-btn[data-state="ok"] .dot { background: #3ecf7e; }
+    #auth-status-btn[data-state="error"] { border-color: #6b3a2a; }
+    #auth-status-btn[data-state="error"] .dot { background: #e5734a; }
     main { width: min(100%, 520px); margin: 0 auto; }
     .eyebrow { margin: 0 0 10px; color: #727272; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
     h1 { margin: 0 0 28px; color: #f3f3f3; font-size: 28px; font-weight: 500; }
@@ -52,6 +71,10 @@
 </head>
 <body>
   <button id="wallet-btn" type="button">Connect Wallet</button>
+  <button id="auth-status-btn" type="button" data-state="checking" title="Verifica in corso...">
+    <span class="dot"></span>
+    <span id="auth-status-label">Verifica...</span>
+  </button>
   <main>
     <p class="eyebrow">Collection</p>
     <h1>Minting</h1>

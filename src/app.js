@@ -10,6 +10,8 @@ const state = {
 
 let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
+const authStatusButton = document.querySelector("#auth-status-btn");
+const authStatusLabel = document.querySelector("#auth-status-label");
 const statusNode = document.querySelector("#status");
 const catalogNode = document.querySelector("#catalog");
 
@@ -155,6 +157,47 @@ async function mint(item, button) {
   }
 }
 
+const AUTH_STATUS_ERROR_MESSAGES = {
+  collection_not_deployed: "Il contratto della collezione non risulta ancora deployato sulla blockchain TON.",
+  key_not_configured: "La variabile d'ambiente AUTHENTICATION_SIGNATURE_PRIVATE_KEY non è configurata su Vercel.",
+  key_mismatch:
+    "La chiave privata in AUTHENTICATION_SIGNATURE_PRIVATE_KEY non corrisponde alla chiave pubblica salvata nello smart contract.",
+  chain_unreachable: "Impossibile contattare la blockchain TON per verificare lo stato del contratto.",
+};
+
+function setAuthStatus(state, label, title) {
+  authStatusButton.dataset.state = state;
+  authStatusButton.title = title;
+  authStatusLabel.textContent = label;
+}
+
+async function checkAuthStatus() {
+  setAuthStatus("checking", "Verifica...", "Verifica in corso...");
+  try {
+    const response = await fetch("/api/auth-status", { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!payload) throw new Error("Risposta non valida dal server");
+
+    if (payload.authorized) {
+      setAuthStatus(
+        "ok",
+        "Autorizzato",
+        `Contratto deployato su ${payload.network} e chiave AUTHENTICATION_SIGNATURE_PRIVATE_KEY corretta.`,
+      );
+      return;
+    }
+
+    const detail = AUTH_STATUS_ERROR_MESSAGES[payload.error] || "Configurazione non valida.";
+    setAuthStatus("error", "Non autorizzato", detail);
+  } catch (error) {
+    setAuthStatus(
+      "error",
+      "Non autorizzato",
+      error instanceof Error ? error.message : "Impossibile verificare lo stato dell'app.",
+    );
+  }
+}
+
 function initTelegram() {
   const tg = window.Telegram?.WebApp;
   if (!tg) return;
@@ -178,4 +221,6 @@ window.addEventListener("DOMContentLoaded", () => {
   initTelegram();
   initWallet();
   loadCatalog();
+  authStatusButton.addEventListener("click", () => checkAuthStatus());
+  checkAuthStatus();
 });

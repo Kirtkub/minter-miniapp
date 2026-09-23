@@ -74,6 +74,37 @@ i file compilati sono già inclusi nel bundle a tempo di build (tramite i
 loader `text`/`binary` di esbuild), quindi non serve alcuna richiesta di
 rete per costruirlo.
 
+## Badge di autorizzazione nella pagina principale
+
+Al caricamento di `/`, la mint app chiama `GET /api/auth-status`, che
+lato server:
+
+1. controlla che il contratto della collezione (`collectionAddress`, sulla
+   rete `tonChain` definiti in `src/config.js`) risulti **deployato e
+   attivo** sulla blockchain TON (tramite TON Center);
+2. legge la variabile d'ambiente **`AUTHENTICATION_SIGNATURE_PRIVATE_KEY`**
+   configurata su Vercel, ne deriva la chiave pubblica Ed25519 e la
+   confronta con `AUTHENTICATION_SIGNATURE_PUBLIC_KEY` salvata on-chain nel
+   contratto (getter `get_auth_public_key`).
+
+Il risultato viene mostrato con un bottoncino in alto a sinistra:
+
+- **grigio ("Verifica...")** mentre il controllo è in corso;
+- **verde ("Autorizzato")** se il contratto è deployato e la chiave privata
+  configurata corrisponde a quella pubblica nel contratto — la mint app può
+  quindi firmare correttamente le richieste di minting;
+- **rosso ("Non autorizzato")** altrimenti, con un tooltip (`title`) che
+  spiega il motivo: contratto non deployato, variabile d'ambiente mancante,
+  chiave non corrispondente, o blockchain non raggiungibile.
+
+Cliccando sul bottoncino il controllo viene ripetuto. L'endpoint non espone
+mai la chiave privata né quella pubblica: restituisce solo booleani
+(`deployed`, `keyConfigured`, `keyMatches`, `authorized`) e un codice di
+errore generico.
+
+La logica di derivazione della chiave (già usata da `api/sign-mint.js` per
+firmare i mint) è condivisa tramite `api/_auth.js`.
+
 ## Dominio configurato
 
 I manifest TonConnect sono già impostati sul dominio di produzione

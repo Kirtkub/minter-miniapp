@@ -116,4 +116,14 @@ export async function loadCatalog() {
   return items;
 }
 
+export async function isContractActive() {
+  const response = await fetch(
+    `${TON_CENTER_BASE}/api/v2/getAddressInformation?address=${encodeURIComponent(collectionAddress)}`,
+    { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10000) },
+  );
+  if (!response.ok) throw new Error(`TON Center request failed with ${response.status}`);
+  const payload = await response.json();
+  return payload?.result?.state === "active";
+}
+
 export { fetchJson, jsonResponse, runGetMethod, stackNumber };
