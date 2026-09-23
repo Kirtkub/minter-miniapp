@@ -23085,7 +23085,7 @@
   }
   function buildMintBody(mint2) {
     const signature = (0, import_core.beginCell)().storeBuffer(Buffer.from(mint2.signature, "hex")).endCell();
-    return (0, import_core.beginCell)().storeUint(1835626100, 32).storeUint(BigInt(mint2.queryId), 64).storeUint(BigInt(mint2.metadataIndex), 32).storeStringRefTail(mint2.contentUrl).storeAddress(import_core.Address.parse(mint2.newOwner)).storeUint(BigInt(mint2.validUntil), 32).storeRef(signature).endCell().toBoc().toString("base64");
+    return (0, import_core.beginCell)().storeUint(1835626100, 32).storeUint(BigInt(mint2.queryId), 64).storeUint(BigInt(mint2.metadataIndex), 32).storeStringRefTail(mint2.contentUrl).storeAddress(import_core.Address.parse(mint2.newOwner)).storeUint(BigInt(mint2.validUntil), 32).storeSlice(signature.beginParse()).endCell().toBoc().toString("base64");
   }
   async function mint(item, button) {
     if (!state.walletAddress || !tonConnectUI) {
