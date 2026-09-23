@@ -1,8 +1,9 @@
-import { createHash, createPrivateKey, randomBytes, sign } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign } from "node:crypto";
 import { Address, beginCell } from "@ton/core";
 import { collectionAddress, nftsMetadataIndex, tonChain } from "../src/config.js";
 import {
   fetchJson,
+  getAuthPublicKey,
   getMintedCount,
   getNextItemIndex,
   jsonResponse,
@@ -54,6 +55,11 @@ function privateKeyFromEnvironment() {
   return createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" });
 }
 
+function privateKeyPublicKey(privateKey) {
+  const der = createPublicKey(privateKey).export({ format: "der", type: "spki" });
+  return BigInt(`0x${der.subarray(-32).toString("hex")}`);
+}
+
 function sha256Integer(value) {
   return BigInt(`0x${createHash("sha256").update(value).digest("hex")}`);
 }
@@ -69,7 +75,7 @@ function signedDataCell({ metadataIndex, contentUrl, newOwner, validUntil, nextI
     .endCell();
 }
 
-function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemIndex }) {
+function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemIndex, privateKey }) {
   const signedData = signedDataCell({
     metadataIndex,
     contentUrl,
@@ -79,7 +85,7 @@ function signMint({ metadataIndex, contentUrl, newOwner, validUntil, nextItemInd
   });
   const digest = signedData.hash();
   const contractDigest = createHash("sha256").update(digest).digest();
-  return sign(null, contractDigest, privateKeyFromEnvironment()).toString("hex");
+  return sign(null, contractDigest, privateKey).toString("hex");
 }
 
 async function getMintingItem(metadataIndex) {
@@ -124,6 +130,15 @@ export default async function handler(req, res) {
     if (minted >= item.maxSupply) throw new Error("This NFT has reached its maximum supply");
 
     const nextItemIndex = await getNextItemIndex();
+    const privateKey = privateKeyFromEnvironment();
+    const configuredPublicKey = privateKeyPublicKey(privateKey);
+    const deployedPublicKey = await getAuthPublicKey();
+    if (configuredPublicKey !== deployedPublicKey) {
+      throw new Error(
+        `AUTHENTICATION_SIGNATURE_PRIVATE_KEY does not match collection public key ` +
+        `(deployed ${deployedPublicKey.toString(16)}, configured ${configuredPublicKey.toString(16)})`,
+      );
+    }
     const validUntil = Math.floor(Date.now() / 1000) + MAX_VALIDITY_SECONDS;
     const queryId = randomBytes(8).readBigUInt64BE();
     const signature = signMint({
@@ -132,6 +147,7 @@ export default async function handler(req, res) {
       newOwner,
       validUntil,
       nextItemIndex,
+      privateKey,
     });
 
     return jsonResponse(res, 200, {

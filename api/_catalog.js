@@ -50,6 +50,10 @@ export async function getNextItemIndex() {
   return stackNumber(await runGetMethod("get_collection_data"));
 }
 
+export async function getAuthPublicKey() {
+  return stackNumber(await runGetMethod("get_auth_public_key"));
+}
+
 export async function getMintedCount(metadataIndex) {
   const stack = await runGetMethod("get_minted_count", [
     ["num", `0x${BigInt(metadataIndex).toString(16)}`],
