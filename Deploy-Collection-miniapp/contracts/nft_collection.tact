@@ -47,12 +47,19 @@ contract NftCollection {
         require(now() <= msg.validUntil, "signature expired");
 
         let contentHash: Int = sha256(msg.contentUrl);
+        // Tact's sha256(Slice) (HASHEXT_SHA256 under the hood) requires the slice's
+        // bit length to be a multiple of 8, or it throws a cell-underflow exception.
+        // metadataIndex(32) + contentHash(256) + address(267) + validUntil(32) +
+        // nextItemIndex(256) = 843 bits, which is NOT byte-aligned, so we pad with
+        // 5 zero bits to reach 848 bits (106 bytes). The off-chain signer must add
+        // the exact same padding when computing the digest it signs.
         let signedData: Cell = beginCell()
             .storeUint(msg.metadataIndex, 32)
             .storeUint(contentHash, 256)
             .storeAddress(msg.newOwner)
             .storeUint(msg.validUntil, 32)
             .storeUint(self.nextItemIndex, 256)
+            .storeUint(0, 5)
             .endCell();
         let digest: Int = sha256(signedData.asSlice());
         require(checkSignature(digest, msg.signature, self.authPublicKey), "invalid signature");

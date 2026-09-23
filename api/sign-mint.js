@@ -66,23 +66,35 @@ function sha256Integer(value) {
 
 function signedDataCell({ metadataIndex, contentUrl, newOwner, validUntil, nextItemIndex }) {
   const contentHash = sha256Integer(contentUrl);
+  // Must mirror nft_collection.tact's Mint receiver exactly, including the 5-bit
+  // padding added there to make the slice byte-aligned (843 -> 848 bits) so that
+  // sha256(Slice)/HASHEXT_SHA256 doesn't throw on-chain.
   return beginCell()
     .storeUint(BigInt(metadataIndex), 32)
     .storeUint(contentHash, 256)
     .storeAddress(newOwner)
     .storeUint(BigInt(validUntil), 32)
     .storeUint(BigInt(nextItemIndex), 256)
+    .storeUint(0, 5)
     .endCell();
 }
 
+// Replicates TVM's HASHEXT_SHA256 (what Tact's sha256(Slice) compiles to): a
+// plain SHA-256 over the slice's raw data bits, packed most-significant-bit
+// first into bytes. Unlike the "standard cell hash" (HASHCU/HASHSU), there is
+// no completion tag / padding bit — the bit length must already be a multiple
+// of 8, or the real opcode throws a cell-underflow exception on-chain.
 function hashSliceData(cell) {
-  const byteLength = Math.ceil(cell.bits.length / 8);
+  if (cell.bits.length % 8 !== 0) {
+    throw new Error(
+      `signedData is ${cell.bits.length} bits, not byte-aligned; sha256(Slice) would throw on-chain`,
+    );
+  }
+  const byteLength = cell.bits.length / 8;
   const data = Buffer.alloc(byteLength);
   for (let bitIndex = 0; bitIndex < cell.bits.length; bitIndex += 1) {
     if (cell.bits.at(bitIndex)) data[bitIndex >> 3] |= 1 << (7 - (bitIndex % 8));
   }
-  const paddingBit = cell.bits.length;
-  data[paddingBit >> 3] |= 1 << (7 - (paddingBit % 8));
   return createHash("sha256").update(data).digest();
 }
 
