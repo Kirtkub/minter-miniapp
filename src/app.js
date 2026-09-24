@@ -229,17 +229,22 @@ function renderCatalog() {
       card.append(image);
     }
 
-    const countdown = createText("p", "", "nft-countdown");
-    countdown.dataset.countdownEnd = String(Date.parse(item.mintEndDate));
+    // Mint amount can be unlimited (no maxSupply in the item's metadata):
+    // in that case item.remaining is null and no "... remaining" line is
+    // shown at all.
+    const remainingLine =
+      item.remaining != null ? createText("p", `${item.remaining} remaining`, "nft-remaining") : null;
+
+    // Mint end date is optional too (no mintEndDate in the item's metadata):
+    // in that case there's no deadline, so no countdown is shown.
+    const countdown = item.mintEndDate ? createText("p", "", "nft-countdown") : null;
+    if (countdown) countdown.dataset.countdownEnd = String(Date.parse(item.mintEndDate));
 
     // Visual order, top to bottom: image, name, price, remaining, countdown,
     // mint button.
-    card.append(
-      createText("h2", item.name, "nft-name"),
-      buildPriceLine(item),
-      createText("p", `${item.remaining} remaining`, "nft-remaining"),
-      countdown,
-    );
+    card.append(createText("h2", item.name, "nft-name"), buildPriceLine(item));
+    if (remainingLine) card.append(remainingLine);
+    if (countdown) card.append(countdown);
 
     // Mint buttons are never disabled for being logged out — clicking one
     // while disconnected opens the wallet connect modal instead, and the
@@ -406,7 +411,7 @@ function buildMintReport(ctx) {
     lines.push(`metadataIndex: ${item.metadataIndex}`);
     lines.push(`Catalog contentUrl: ${item.contentUrl || "-"}`);
     lines.push(`Listed price: ${item.mintingPrice} TON`);
-    lines.push(`Remaining (last known): ${item.remaining}`);
+    lines.push(`Remaining (last known): ${item.remaining != null ? item.remaining : "unlimited"}`);
   } else {
     lines.push("(not available)");
   }

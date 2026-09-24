@@ -95,18 +95,26 @@ async function getMintingItem(metadataIndex) {
   if (typeof contentUrl !== "string" || !URL.canParse(contentUrl)) throw new Error("Invalid metadata URL");
   const raw = await fetchJson(contentUrl);
   const mintingPrice = Number(raw?.mintingPrice);
-  const maxSupply = Number(raw?.maxSupply);
-  const start = Date.parse(raw?.mintStartDate);
-  const end = Date.parse(raw?.mintEndDate);
+
+  // Same optional-fields handling as _catalog.js: no maxSupply => unlimited,
+  // no mintStartDate => mintable right away, no mintEndDate => no deadline.
+  const hasMaxSupply = raw?.maxSupply !== undefined && raw?.maxSupply !== null && raw?.maxSupply !== "";
+  const maxSupply = hasMaxSupply ? Number(raw.maxSupply) : null;
+
+  const hasStart = typeof raw?.mintStartDate === "string" && raw.mintStartDate.trim() !== "";
+  const start = hasStart ? Date.parse(raw.mintStartDate) : null;
+
+  const hasEnd = typeof raw?.mintEndDate === "string" && raw.mintEndDate.trim() !== "";
+  const end = hasEnd ? Date.parse(raw.mintEndDate) : null;
+
   if (
     !Number.isFinite(mintingPrice) ||
     mintingPrice <= 0 ||
-    !Number.isSafeInteger(maxSupply) ||
-    maxSupply <= 0 ||
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    Date.now() < start ||
-    Date.now() > end
+    (hasMaxSupply && (!Number.isSafeInteger(maxSupply) || maxSupply <= 0)) ||
+    (hasStart && !Number.isFinite(start)) ||
+    (hasEnd && !Number.isFinite(end)) ||
+    (hasStart && Date.now() < start) ||
+    (hasEnd && Date.now() > end)
   ) {
     throw new Error("This NFT is not available to mint");
   }
@@ -125,7 +133,9 @@ export default async function handler(req, res) {
     const newOwner = Address.parse(String(body.newOwner));
     const item = await getMintingItem(metadataIndex);
     const minted = Number(await getMintedCount(metadataIndex));
-    if (minted >= item.maxSupply) throw new Error("This NFT has reached its maximum supply");
+    if (item.maxSupply != null && minted >= item.maxSupply) {
+      throw new Error("This NFT has reached its maximum supply");
+    }
 
     const nextItemIndex = await getNextItemIndex();
     const privateKey = privateKeyFromEnvironment();

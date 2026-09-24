@@ -63,20 +63,29 @@ export async function getMintedCount(metadataIndex) {
 
 function parseItem(raw, metadataIndex, contentUrl) {
   const mintingPrice = Number(raw?.mintingPrice);
-  const maxSupply = Number(raw?.maxSupply);
-  const start = Date.parse(raw?.mintStartDate);
-  const end = Date.parse(raw?.mintEndDate);
+
+  // maxSupply, mintStartDate and mintEndDate are all optional in the NFT's
+  // metadata JSON. Missing (or an empty value) means, respectively:
+  // unlimited supply, no start gate (mintable right away), no end date
+  // (mintable forever).
+  const hasMaxSupply = raw?.maxSupply !== undefined && raw?.maxSupply !== null && raw?.maxSupply !== "";
+  const maxSupply = hasMaxSupply ? Number(raw.maxSupply) : null;
+
+  const hasStart = typeof raw?.mintStartDate === "string" && raw.mintStartDate.trim() !== "";
+  const start = hasStart ? Date.parse(raw.mintStartDate) : null;
+
+  const hasEnd = typeof raw?.mintEndDate === "string" && raw.mintEndDate.trim() !== "";
+  const end = hasEnd ? Date.parse(raw.mintEndDate) : null;
 
   if (
     !raw ||
     typeof raw.name !== "string" ||
     !Number.isFinite(mintingPrice) ||
     mintingPrice <= 0 ||
-    !Number.isSafeInteger(maxSupply) ||
-    maxSupply <= 0 ||
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    start > end
+    (hasMaxSupply && (!Number.isSafeInteger(maxSupply) || maxSupply <= 0)) ||
+    (hasStart && !Number.isFinite(start)) ||
+    (hasEnd && !Number.isFinite(end)) ||
+    (hasStart && hasEnd && start > end)
   ) {
     return null;
   }
@@ -88,8 +97,8 @@ function parseItem(raw, metadataIndex, contentUrl) {
     image: typeof raw.image === "string" ? raw.image : null,
     mintingPrice,
     maxSupply,
-    mintStartDate: new Date(start).toISOString(),
-    mintEndDate: new Date(end).toISOString(),
+    mintStartDate: hasStart ? new Date(start).toISOString() : null,
+    mintEndDate: hasEnd ? new Date(end).toISOString() : null,
   };
 }
 
@@ -106,9 +115,14 @@ export async function loadCatalog() {
     const item = parseItem(await fetchJson(contentUrl), metadataIndex, contentUrl);
     if (!item) continue;
     const minted = Number(await getMintedCount(metadataIndex));
-    const remaining = Math.max(0, item.maxSupply - minted);
+    // No maxSupply in the metadata => unlimited mint, remaining stays null
+    // (the frontend hides the "... remaining" line whenever it's null).
+    const remaining = item.maxSupply != null ? Math.max(0, item.maxSupply - minted) : null;
     const now = Date.now();
-    if (now >= Date.parse(item.mintStartDate) && now <= Date.parse(item.mintEndDate) && remaining > 0) {
+    const afterStart = item.mintStartDate == null || now >= Date.parse(item.mintStartDate);
+    const beforeEnd = item.mintEndDate == null || now <= Date.parse(item.mintEndDate);
+    const hasSupplyLeft = remaining == null || remaining > 0;
+    if (afterStart && beforeEnd && hasSupplyLeft) {
       items.push({ ...item, minted, remaining });
     }
   }
