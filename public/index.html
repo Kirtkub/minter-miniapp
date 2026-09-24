@@ -104,7 +104,9 @@
     /* Intro text under each page title */
     .intro { margin: 0 0 28px; color: #b5b5b5; font-size: 14px; line-height: 1.5; }
     .intro p { margin: 0 0 6px; }
-    .intro .continue-btn { background: none; border: none; padding: 0; font: inherit; font-size: 12px; color: #e3b341; cursor: pointer; text-decoration: underline; }
+    .intro ul { margin: 0; padding-left: 20px; }
+    .intro li { margin-bottom: 6px; }
+    .intro .continue-btn { background: none; border: none; padding: 0; font: inherit; font-size: 12px; color: #6f6f6f; cursor: pointer; text-decoration: underline; }
     .intro [hidden] { display: none; }
     .empty-info { margin: 0 0 24px; padding: 16px; border: 1px solid #262626; border-radius: 12px; color: #b5b5b5; font-size: 14px; line-height: 1.5; }
     .empty-info[hidden] { display: none; }
@@ -336,13 +338,13 @@
       <p class="eyebrow collection-name"></p>
       <h1>Mint and Reveal</h1>
       <div class="intro">
-        <p>Limited edition release of unique and exclusive images</p>
-        <p>Private explicit photos by cleoyleo</p>
-        <p>Mint to see the uncensored photo... <button id="intro-continue" class="continue-btn" type="button">continue</button></p>
-        <div id="intro-more" hidden>
-          <p>Certified ownership on blockchain</p>
-          <p>Resell whenever you want on the secondary market</p>
-        </div>
+        <ul>
+          <li>Limited edition release of unique and exclusive images</li>
+          <li>Private explicit photos by cleoyleo</li>
+          <li>Mint to see the uncensored photos <button id="intro-continue" class="continue-btn" type="button">...more</button></li>
+          <li class="intro-more" hidden>Certified ownership on blockchain</li>
+          <li class="intro-more" hidden>Resell whenever you want on <a class="getgems-collection-link" href="#" target="_blank" rel="noopener">getgems</a></li>
+        </ul>
       </div>
       <p id="status" role="status" hidden></p>
       <section id="catalog" aria-live="polite"></section>
@@ -368,7 +370,7 @@
       <div id="empty-info" class="empty-info" hidden>
         <p><strong>Download available</strong></p>
         <p>High-quality images, perfect for your phone wallpaper or... other uses</p>
-        <p>Resell whenever you want on <a id="getgems-collection-link" href="#" target="_blank" rel="noopener">Getgems</a></p>
+        <p>Resell whenever you want on <a class="getgems-collection-link" href="#" target="_blank" rel="noopener">Getgems</a></p>
       </div>
       <p id="collection-status" role="status" hidden></p>
       <section id="my-collection" aria-live="polite"></section>

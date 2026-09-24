@@ -57,9 +57,9 @@ const debugCloseButton = document.querySelector("#debug-report-close");
 const withdrawButton = document.querySelector("#withdraw-btn");
 const collectionNameNodes = document.querySelectorAll(".collection-name");
 const introContinueButton = document.querySelector("#intro-continue");
-const introMoreNode = document.querySelector("#intro-more");
+const introMoreNodes = document.querySelectorAll(".intro-more");
 const emptyInfoNode = document.querySelector("#empty-info");
-const getgemsCollectionLink = document.querySelector("#getgems-collection-link");
+const getgemsCollectionLinks = document.querySelectorAll(".getgems-collection-link");
 
 // --- Collection name (from the collection metadata, via the API) ---------
 function setCollectionName(name) {
@@ -84,11 +84,15 @@ function getgemsCollectionUrl() {
   return `${base}/collection/${collectionAddress}`;
 }
 
-// "continue" under the Mint and Reveal intro expands the rest of the text.
+// "...more" in the Mint and Reveal intro reveals the remaining bullets.
 function initIntro() {
-  if (getgemsCollectionLink) getgemsCollectionLink.href = getgemsCollectionUrl();
+  getgemsCollectionLinks.forEach((link) => {
+    link.href = getgemsCollectionUrl();
+  });
   introContinueButton?.addEventListener("click", () => {
-    introMoreNode.hidden = false;
+    introMoreNodes.forEach((node) => {
+      node.hidden = false;
+    });
     introContinueButton.hidden = true;
   });
 }
