@@ -105,6 +105,52 @@ errore generico.
 La logica di derivazione della chiave (già usata da `api/sign-mint.js` per
 firmare i mint) è condivisa tramite `api/_auth.js`.
 
+## "My Collection" (immagini private/rivelate)
+
+La pagina `/` → tab "My Collection" mostra il feed degli NFT posseduti dal
+wallet collegato, ciascuno con la sua **immagine privata** (il campo
+`privateImage` nel JSON dei metadata del suo `contentUrl`, invece del
+campo pubblico `image` usato nel catalogo di mint).
+
+Flusso:
+
+1. Il frontend chiama `GET /api/my-collection?owner=<wallet>`.
+2. Il server elenca gli item della collezione posseduti da quel wallet
+   tramite l'indexer v3 di TON Center (`owner_address` + `collection_address`),
+   poi per ciascun item legge **direttamente on-chain** (`get_nft_data()`
+   sul contratto dell'item) l'owner effettivo, la collezione e il content
+   URL, scartando qualsiasi item che non risulti davvero inizializzato,
+   appartenente a questa collezione e posseduto da quel wallet in questo
+   preciso momento. Nessun dato di questa fase è considerato "fidato" ai
+   fini di sicurezza: serve solo a costruire la lista da mostrare.
+3. Ogni voce della risposta contiene solo un link **proxy** —
+   `/api/private-image?item=<indirizzo>&owner=<wallet>` — mai l'URL
+   privato reale né tantomeno `NETLIFY_PRIVATE_SECRET`.
+4. `GET /api/private-image` rifà la stessa verifica on-chain (in modo
+   indipendente, ad ogni richiesta) prima di scaricare `privateImage` dal
+   metadata host con l'header `Authorization: Bearer NETLIFY_PRIVATE_SECRET`
+   e restituirne i byte al browser. Se la verifica fallisce risponde `403`.
+
+Va configurata su Vercel la variabile d'ambiente **`NETLIFY_PRIVATE_SECRET`**
+(il bearer token che il metadata host richiede per servire le immagini
+private) — senza questa variabile `/api/private-image` risponde `500`.
+
+**Limite di sicurezza noto:** l'indirizzo `owner` è quello riportato dal
+wallet collegato via TonConnect, esattamente come già avviene altrove in
+questa app (es. `newOwner` nel mint). Non c'è una sessione basata su firma
+del wallet (`ton_proof`), quindi l'accesso è correttamente ristretto a chi
+possiede realmente l'NFT on-chain in quel momento, ma non è legato
+crittograficamente a una firma provata. Aggiungere il flusso `ton_proof` di
+TonConnect chiuderebbe anche questo ultimo margine, se mai necessario.
+
+**Pulsante "Sell":** mettere in vendita un NFT richiede deployare il
+contratto di vendita del marketplace, che è un flusso proprietario di
+Getgems (non esiste un'API pubblica per un miniapp di terze parti che lo
+faccia senza replicarne esattamente la spec del contratto). Il pulsante
+"Sell" apre quindi la pagina Getgems dell'item sul dominio corretto
+(`getgems.io` su Mainnet, `testnet.getgems.io` su Testnet), dove Getgems
+riconosce da sé il wallet collegato e mostra la propria azione "vendi".
+
 ## Dominio configurato
 
 I manifest TonConnect sono già impostati sul dominio di produzione

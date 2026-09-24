@@ -7,6 +7,13 @@ const state = {
   items: [],
   loading: false,
   tonUsd: null,
+  // "My Collection" (revealed/private images of owned NFTs).
+  myItems: [],
+  myCollectionLoading: false,
+  myCollectionError: null,
+  // Wallet address the current myItems/myCollectionError were loaded for —
+  // lets loadMyCollection() know it needs to refetch after a wallet switch.
+  myCollectionLoadedFor: null,
 };
 
 // Official Gram Diamond Mark. Fixed markup, no dynamic data inside, so
@@ -38,6 +45,11 @@ const authStatusButton = document.querySelector("#auth-status-btn");
 const authStatusLabel = document.querySelector("#auth-status-label");
 const statusNode = document.querySelector("#status");
 const catalogNode = document.querySelector("#catalog");
+const collectionStatusNode = document.querySelector("#collection-status");
+const myCollectionNode = document.querySelector("#my-collection");
+const lightbox = document.querySelector("#lightbox");
+const lightboxImage = document.querySelector("#lightbox-image");
+const lightboxClose = document.querySelector("#lightbox-close");
 const debugSection = document.querySelector("#debug-report");
 const debugContent = document.querySelector("#debug-report-content");
 const debugCopyButton = document.querySelector("#debug-report-copy");
@@ -61,6 +73,7 @@ function showPage(name) {
     if (isActive) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
+  if (name === "collection") loadMyCollection();
 }
 
 function initNav() {
@@ -115,12 +128,21 @@ function updateWithdrawVisibility() {
 }
 
 function setWalletState(wallet) {
+  const previousAddress = state.walletAddress;
   state.connected = Boolean(wallet);
   state.walletAddress = wallet?.account?.address || null;
   walletButtonLabel.textContent = state.connected ? "Disconnect" : "Connect Wallet";
   walletButton.classList.toggle("connected", state.connected);
   updateWithdrawVisibility();
   renderCatalog();
+
+  if (state.walletAddress !== previousAddress) {
+    state.myItems = [];
+    state.myCollectionError = null;
+    state.myCollectionLoadedFor = null;
+    if (!pages.collection.hidden) loadMyCollection();
+    else renderMyCollection();
+  }
 
   // If the wallet just connected because the user clicked "Mint" while
   // disconnected, pick up where they left off.
@@ -296,6 +318,187 @@ async function loadCatalog() {
   } finally {
     state.loading = false;
     renderCatalog();
+  }
+}
+
+// --- My Collection (revealed/private images) -----------------------------
+
+function setCollectionStatus(message = "") {
+  collectionStatusNode.textContent = message;
+  collectionStatusNode.hidden = !message;
+}
+
+async function loadMyCollection() {
+  if (!state.walletAddress) {
+    state.myItems = [];
+    state.myCollectionError = null;
+    state.myCollectionLoadedFor = null;
+    renderMyCollection();
+    return;
+  }
+  // Already loaded (or currently loading) for this exact wallet — nav
+  // switches and reconnect-to-same-wallet events shouldn't refetch.
+  if (state.myCollectionLoadedFor === state.walletAddress || state.myCollectionLoading) {
+    renderMyCollection();
+    return;
+  }
+
+  state.myCollectionLoading = true;
+  renderMyCollection();
+  try {
+    const response = await fetch(`/api/my-collection?owner=${encodeURIComponent(state.walletAddress)}`, {
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || "Unable to load your collection");
+    state.myItems = Array.isArray(payload.items) ? payload.items : [];
+    state.myCollectionError = null;
+  } catch (error) {
+    state.myItems = [];
+    state.myCollectionError = error instanceof Error ? error.message : "Unable to load your collection.";
+  } finally {
+    state.myCollectionLoading = false;
+    state.myCollectionLoadedFor = state.walletAddress;
+    renderMyCollection();
+  }
+}
+
+function openLightbox(imageUrl) {
+  lightboxImage.src = imageUrl;
+  lightbox.hidden = false;
+}
+
+function closeLightbox() {
+  lightbox.hidden = true;
+  lightboxImage.src = "";
+}
+
+// Downloads the revealed image to the device. Prefers Telegram's native
+// download-to-device API when available (best chance of landing in the
+// phone's gallery/Files app from inside the Telegram webview); falls back
+// to a plain same-origin blob download everywhere else.
+async function downloadRevealedImage(item, button) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Downloading...";
+  try {
+    const tg = window.Telegram?.WebApp;
+    const filename = `${item.name.replace(/[^a-z0-9-_]+/gi, "_") || "nft"}.jpg`;
+    if (tg?.downloadFile) {
+      await new Promise((resolve, reject) => {
+        try {
+          tg.downloadFile({ url: item.privateImageUrl, file_name: filename }, (accepted) => {
+            if (accepted) resolve();
+            else reject(new Error("cancelled"));
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+      return;
+    }
+    const response = await fetch(item.privateImageUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error("Download failed");
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+  } catch (error) {
+    // A cancelled Telegram download isn't an error worth alerting about.
+    if (!(error instanceof Error) || error.message !== "cancelled") {
+      window.alert(`Unable to download the image: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+// Opens the NFT's Getgems page so the user can list it for sale there.
+// Note: putting an item up for sale requires deploying a marketplace sale
+// contract, which is Getgems' own flow (there is no public API for a
+// third-party miniapp to do this without replicating their sale-contract
+// spec). This opens the correct network's Getgems item page — Getgems
+// detects the connected wallet's ownership itself and surfaces its own
+// "Sell" action there.
+function sellOnGetgems(item) {
+  window.open(item.getgemsUrl, "_blank", "noopener");
+}
+
+function renderMyCollection() {
+  myCollectionNode.replaceChildren();
+
+  if (!state.walletAddress) {
+    setCollectionStatus("");
+    myCollectionNode.append(createText("p", "Connect your wallet to see your collection.", "catalog-message"));
+    return;
+  }
+  if (state.myCollectionLoading) {
+    setCollectionStatus("");
+    myCollectionNode.append(createText("p", "Loading your collection.", "catalog-message"));
+    return;
+  }
+  if (state.myCollectionError) {
+    setCollectionStatus("");
+    myCollectionNode.append(createText("p", state.myCollectionError, "catalog-message"));
+    return;
+  }
+  if (state.myItems.length === 0) {
+    setCollectionStatus("");
+    myCollectionNode.append(createText("p", "You don't own any NFTs from this collection yet.", "catalog-message"));
+    return;
+  }
+
+  setCollectionStatus("");
+  for (const item of state.myItems) {
+    const card = document.createElement("article");
+    card.className = "my-card";
+
+    const imageButton = document.createElement("button");
+    imageButton.type = "button";
+    imageButton.className = "my-image-btn";
+    imageButton.setAttribute("aria-label", `View ${item.name} fullscreen`);
+    const image = document.createElement("img");
+    image.className = "my-image";
+    image.alt = item.name;
+    image.loading = "lazy";
+    image.src = item.hasPrivateImage ? item.privateImageUrl : "";
+    imageButton.append(image);
+    imageButton.addEventListener("click", () => openLightbox(item.privateImageUrl));
+    card.append(imageButton, createText("h2", item.name, "my-name"));
+
+    const actions = document.createElement("div");
+    actions.className = "my-actions";
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "btn-getgems";
+    openButton.textContent = "Open on Getgems";
+    openButton.addEventListener("click", () => window.open(item.getgemsUrl, "_blank", "noopener"));
+
+    const sellButton = document.createElement("button");
+    sellButton.type = "button";
+    sellButton.className = "btn-sell";
+    sellButton.textContent = "Sell";
+    sellButton.addEventListener("click", () => sellOnGetgems(item));
+
+    actions.append(openButton, sellButton);
+
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.className = "btn-download";
+    downloadButton.textContent = "Download Revealed Image";
+    downloadButton.disabled = !item.hasPrivateImage;
+    downloadButton.addEventListener("click", () => downloadRevealedImage(item, downloadButton));
+    actions.append(downloadButton);
+
+    card.append(actions);
+    myCollectionNode.append(card);
   }
 }
 
@@ -625,4 +828,11 @@ window.addEventListener("DOMContentLoaded", () => {
     debugSection.hidden = true;
   });
   withdrawButton?.addEventListener("click", () => withdrawFunds());
+  lightboxClose?.addEventListener("click", () => closeLightbox());
+  lightbox?.addEventListener("click", (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+  });
 });

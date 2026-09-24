@@ -1,9 +1,17 @@
+import { Address, Cell } from "@ton/core";
 import { collectionAddress, nftsMetadataIndex, tonChain } from "../src/config.js";
 
 const TON_CENTER_BASE =
   tonChain === "Testnet" ? "https://testnet.toncenter.com" : "https://toncenter.com";
 const GETTER_RETRY_DELAYS = [500, 1200, 2500];
 let catalogCache = { expiresAt: 0, items: null };
+
+// Small in-memory cache for per-item metadata JSON fetched while building
+// "My Collection" (many owned items usually share the same contentUrl,
+// since they were minted from the same catalog entry). Like catalogCache,
+// this only lives for the lifetime of a warm serverless instance — that's
+// fine, it's a latency optimization, not a correctness requirement.
+const metadataJsonCache = new Map(); // url -> { expiresAt, data }
 
 function jsonResponse(res, status, body) {
   res.status(status).json(body);
@@ -18,12 +26,23 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function runGetMethod(method, stack = []) {
+// Same as fetchJson, but memoized for a short time. Used when the same
+// metadata URL is likely to be requested repeatedly in a short window
+// (e.g. several owned NFTs of the same type in "My Collection").
+async function fetchJsonCached(url, ttlMs = 15000) {
+  const cached = metadataJsonCache.get(url);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  const data = await fetchJson(url);
+  metadataJsonCache.set(url, { data, expiresAt: Date.now() + ttlMs });
+  return data;
+}
+
+async function runGetMethodAt(address, method, stack = []) {
   for (let attempt = 0; attempt <= GETTER_RETRY_DELAYS.length; attempt += 1) {
     const response = await fetch(`${TON_CENTER_BASE}/api/v2/runGetMethod`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ address: collectionAddress, method, stack }),
+      body: JSON.stringify({ address, method, stack }),
       signal: AbortSignal.timeout(10000),
     });
     if (response.ok) {
@@ -40,10 +59,112 @@ async function runGetMethod(method, stack = []) {
   }
 }
 
+async function runGetMethod(method, stack = []) {
+  return runGetMethodAt(collectionAddress, method, stack);
+}
+
+// TON Center's v2 runGetMethod represents negative TVM integers as e.g.
+// "-0x1" (leading '-' in front of the 0x-prefixed magnitude). BigInt()
+// does not accept a sign together with a "0x" prefix, so it has to be
+// stripped and re-applied manually.
+function parseTvmInt(value) {
+  const str = String(value);
+  return str.startsWith("-") ? -BigInt(str.slice(1)) : BigInt(str);
+}
+
 function stackNumber(stack, position = 0) {
   const item = stack?.[position];
   if (!item || item[0] !== "num") throw new Error("Unexpected TON getter response");
-  return BigInt(item[1]);
+  return parseTvmInt(item[1]);
+}
+
+function stackBool(stack, position = 0) {
+  return stackNumber(stack, position) !== 0n;
+}
+
+function stackCell(stack, position = 0) {
+  const item = stack?.[position];
+  if (!item || item[0] !== "cell" || !item[1]?.bytes) {
+    throw new Error("Unexpected TON getter response (expected cell)");
+  }
+  return Cell.fromBoc(Buffer.from(item[1].bytes, "base64"))[0];
+}
+
+function stackAddress(stack, position = 0) {
+  return stackCell(stack, position).beginParse().loadAddress();
+}
+
+// Concatenates the raw bytes of a "snake format" cell chain (each cell's
+// bits, followed by its single ref's bits, and so on) — the encoding Tact's
+// storeStringTail / @stdlib/content's createOffchainContent produce.
+function snakeBytes(cell) {
+  const chunks = [];
+  let current = cell;
+  while (current) {
+    const slice = current.beginParse();
+    const byteLength = Math.floor(slice.remainingBits / 8);
+    chunks.push(slice.loadBuffer(byteLength));
+    current = slice.remainingRefs > 0 ? slice.loadRef() : null;
+  }
+  return Buffer.concat(chunks);
+}
+
+// Decodes a TEP-64 offchain NFT content cell (tag byte 0x01 followed by a
+// snake-encoded ASCII URL) into the plain URL string.
+function decodeOffchainContentUrl(cell) {
+  const bytes = snakeBytes(cell);
+  if (bytes.length === 0 || bytes[0] !== 0x01) {
+    throw new Error("NFT content is not an offchain link");
+  }
+  return bytes.subarray(1).toString("utf8");
+}
+
+// Reads an NFT item's on-chain data directly from the item contract
+// (see nft_item.tact's get_nft_data): whether it's initialized, its index,
+// its collection and owner addresses, and its individual content decoded
+// into the metadata URL used at mint time.
+export async function getItemNftData(itemAddress) {
+  const stack = await runGetMethodAt(itemAddress, "get_nft_data");
+  const inited = stackBool(stack, 0);
+  const index = stackNumber(stack, 1);
+  const collection = stackAddress(stack, 2);
+  const owner = stackAddress(stack, 3);
+  const contentUrl = inited ? decodeOffchainContentUrl(stackCell(stack, 4)) : null;
+  return { inited, index, collection, owner, contentUrl };
+}
+
+// Lists the NFT items of this collection currently owned by `ownerAddress`,
+// via TON Center's v3 indexer (owner_address + collection_address filter).
+// Paginated defensively up to a generous cap; items only get treated as
+// actually-owned once their on-chain get_nft_data() is checked individually
+// (see getItemNftData / api/private-image.js), so this listing itself does
+// not need to be trusted for anything security-sensitive.
+export async function listOwnedItemAddresses(ownerAddress, { maxItems = 500 } = {}) {
+  const owner = Address.parse(ownerAddress).toString();
+  const collection = Address.parse(collectionAddress).toString();
+  const limit = 200;
+  let offset = 0;
+  const items = [];
+
+  while (items.length < maxItems) {
+    const url =
+      `${TON_CENTER_BASE}/api/v3/nft/items?owner_address=${encodeURIComponent(owner)}` +
+      `&collection_address=${encodeURIComponent(collection)}&limit=${limit}&offset=${offset}`;
+    const response = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`TON Center v3 request failed with ${response.status}`);
+    const payload = await response.json();
+    const batch = Array.isArray(payload?.nft_items) ? payload.nft_items : [];
+    for (const raw of batch) {
+      if (typeof raw?.address === "string") items.push(raw.address);
+    }
+    if (batch.length < limit) break;
+    offset += limit;
+  }
+
+  return items.slice(0, maxItems);
 }
 
 export async function getNextItemIndex() {
@@ -141,4 +262,4 @@ export async function isContractActive() {
   return payload?.result?.state === "active";
 }
 
-export { fetchJson, jsonResponse, runGetMethod, stackNumber };
+export { fetchJson, fetchJsonCached, jsonResponse, runGetMethod, runGetMethodAt, stackNumber };

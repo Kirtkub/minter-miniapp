@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import catalogHandler from "../api/catalog.js";
 import signMintHandler from "../api/sign-mint.js";
 import authStatusHandler from "../api/auth-status.js";
+import myCollectionHandler from "../api/my-collection.js";
+import privateImageHandler from "../api/private-image.js";
+import tonPriceHandler from "../api/ton-price.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
 const port = Number(process.env.PORT || 5000);
@@ -34,6 +37,9 @@ function responseAdapter(res) {
     res.setHeader("content-type", "application/json; charset=utf-8");
     res.end(JSON.stringify(body));
   };
+  res.send = (body) => {
+    res.end(body);
+  };
   return res;
 }
 
@@ -42,6 +48,9 @@ const server = createServer(async (req, res) => {
   if (requestPath === "/api/catalog") return catalogHandler(req, responseAdapter(res));
   if (requestPath === "/api/sign-mint") return signMintHandler(req, responseAdapter(res));
   if (requestPath === "/api/auth-status") return authStatusHandler(req, responseAdapter(res));
+  if (requestPath === "/api/my-collection") return myCollectionHandler(req, responseAdapter(res));
+  if (requestPath === "/api/private-image") return privateImageHandler(req, responseAdapter(res));
+  if (requestPath === "/api/ton-price") return tonPriceHandler(req, responseAdapter(res));
 
   const relative = normalize(HTML_FALLBACKS[requestPath] || requestPath);
   const filePath = join(root, relative);
