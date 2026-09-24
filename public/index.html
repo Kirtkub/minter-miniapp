@@ -114,22 +114,22 @@
     .nft-remaining { margin: 4px 0 0; color: #909090; font-size: 14px; }
     .nft-countdown { margin: 6px 0 14px; font-weight: 700; font-size: 15px; color: #e3b341; }
 
-    /* Mint button: solid blue, per the collection's accent color. */
+    /* Mint button: yellow for the first mint ("Mint and Reveal"). */
     .mint-button {
       width: 100%;
       padding: 16px;
-      background: #30A1F5;
+      background: #e3b341;
       border: none;
       border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
-      color: #fff;
+      color: #1a1400;
     }
-    .mint-button:active { background: #2790dd; }
+    .mint-button:active { background: #cf9f2f; }
     .mint-button:disabled { cursor: default; opacity: .6; }
-    /* Already owns a copy: "Mint another copy" in yellow. */
-    .mint-button.owned { background: #e3b341; color: #1a1400; }
-    .mint-button.owned:active { background: #cf9f2f; }
+    /* Already owns a copy: "Mint another copy" in blue. */
+    .mint-button.owned { background: #30A1F5; color: #fff; }
+    .mint-button.owned:active { background: #2790dd; }
     .open-in-collection { margin: 12px 0 0; text-align: center; font-size: 14px; }
     .open-in-collection a { color: #30A1F5; text-decoration: underline; cursor: pointer; }
 
