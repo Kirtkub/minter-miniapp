@@ -55,6 +55,43 @@ const debugContent = document.querySelector("#debug-report-content");
 const debugCopyButton = document.querySelector("#debug-report-copy");
 const debugCloseButton = document.querySelector("#debug-report-close");
 const withdrawButton = document.querySelector("#withdraw-btn");
+const collectionNameNodes = document.querySelectorAll(".collection-name");
+const introContinueButton = document.querySelector("#intro-continue");
+const introMoreNode = document.querySelector("#intro-more");
+const emptyInfoNode = document.querySelector("#empty-info");
+const getgemsCollectionLink = document.querySelector("#getgems-collection-link");
+
+// --- Collection name (from the collection metadata, via the API) ---------
+function setCollectionName(name) {
+  collectionNameNodes.forEach((node) => {
+    node.textContent = name;
+  });
+}
+
+async function loadCollectionInfo() {
+  try {
+    const response = await fetch("/api/collection-info");
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.name) throw new Error("no name");
+    setCollectionName(payload.name);
+  } catch {
+    setCollectionName("Collection");
+  }
+}
+
+function getgemsCollectionUrl() {
+  const base = tonChain === "Testnet" ? "https://testnet.getgems.io" : "https://getgems.io";
+  return `${base}/collection/${collectionAddress}`;
+}
+
+// "continue" under the Mint and Reveal intro expands the rest of the text.
+function initIntro() {
+  if (getgemsCollectionLink) getgemsCollectionLink.href = getgemsCollectionUrl();
+  introContinueButton?.addEventListener("click", () => {
+    introMoreNode.hidden = false;
+    introContinueButton.hidden = true;
+  });
+}
 
 function setStatus(message = "") {
   statusNode.textContent = message;
@@ -531,9 +568,19 @@ function sellOnGetgems(item) {
 function renderMyCollection() {
   myCollectionNode.replaceChildren();
 
+  // Extra info (download / resell) is shown to users who don't own any NFT
+  // yet, including when no wallet is connected.
+  emptyInfoNode.hidden = !(
+    !state.walletAddress ||
+    (!state.myCollectionLoading && !state.myCollectionError && state.myItems.length === 0)
+  );
+
   if (!state.walletAddress) {
     setCollectionStatus("");
-    myCollectionNode.append(createText("p", "Connect your wallet to see your collection.", "catalog-message"));
+    const connectButton = createText("button", "CONNECT WALLET TO START", "connect-cta");
+    connectButton.type = "button";
+    connectButton.addEventListener("click", () => tonConnectUI?.openModal());
+    myCollectionNode.append(connectButton);
     return;
   }
   if (state.myCollectionLoading && state.myItems.length === 0) {
@@ -917,7 +964,9 @@ function initWallet() {
 window.addEventListener("DOMContentLoaded", () => {
   initTelegram();
   initNav();
+  initIntro();
   initWallet();
+  loadCollectionInfo();
   loadCatalog();
   loadTonPrice();
   authStatusButton.addEventListener("click", () => checkAuthStatus());
