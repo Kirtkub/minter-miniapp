@@ -6,3 +6,7 @@ export const ownerAddress = "kQBI3zZTgWxuJwG96FxptKWGzH1uXw0wHddsCWWqbzUOa9uX";
 export const collectionMetadata = "https://astounding-flan-ffc457.netlify.app/collectionMetadata.json";
 export const nftsMetadataIndex = "https://astounding-flan-ffc457.netlify.app/metadataIndex.json";
 export const tonChain = "Testnet";
+// Telegram access gate (only applied when the app is opened as a Telegram
+// miniapp): users must be adults and members of this channel.
+export const channelChatId = "-1001898840240";
+export const channelInviteLink = "https://t.me/+EToBLGdMi5c2ZjY0";

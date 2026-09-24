@@ -9,6 +9,8 @@ import authStatusHandler from "../api/auth-status.js";
 import myCollectionHandler from "../api/my-collection.js";
 import privateImageHandler from "../api/private-image.js";
 import tonPriceHandler from "../api/ton-price.js";
+import collectionInfoHandler from "../api/collection-info.js";
+import channelAccessHandler from "../api/channel-access.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
 const port = Number(process.env.PORT || 5000);
@@ -51,6 +53,8 @@ const server = createServer(async (req, res) => {
   if (requestPath === "/api/my-collection") return myCollectionHandler(req, responseAdapter(res));
   if (requestPath === "/api/private-image") return privateImageHandler(req, responseAdapter(res));
   if (requestPath === "/api/ton-price") return tonPriceHandler(req, responseAdapter(res));
+  if (requestPath === "/api/collection-info") return collectionInfoHandler(req, responseAdapter(res));
+  if (requestPath === "/api/channel-access") return channelAccessHandler(req, responseAdapter(res));
 
   const relative = normalize(HTML_FALLBACKS[requestPath] || requestPath);
   const filePath = join(root, relative);

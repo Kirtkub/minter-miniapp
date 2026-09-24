@@ -116,6 +116,18 @@
     .empty-info a, .intro a { color: #30A1F5; text-decoration: underline; }
     .connect-cta { width: 100%; padding: 20px 16px; background: #30A1F5; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; letter-spacing: .04em; color: #fff; cursor: pointer; }
     .connect-cta:active { background: #2790dd; }
+    /* Access gate (age confirmation + channel membership), Telegram only */
+    #gate { position: fixed; inset: 0; z-index: 100; background: #0b0b0b; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    #gate[hidden] { display: none; }
+    .gate-box { width: min(100%, 420px); text-align: center; }
+    #gate-text { margin: 0 0 24px; color: #e6e6e6; font-size: 17px; line-height: 1.5; }
+    .gate-btn { display: block; width: 100%; margin: 0 0 12px; padding: 18px 16px; border: none; border-radius: 14px; background: #30A1F5; color: #fff; font-size: 16px; font-weight: 700; letter-spacing: .03em; cursor: pointer; }
+    .gate-btn:active { background: #2790dd; }
+    .gate-btn:disabled { opacity: .6; cursor: default; }
+    .gate-btn.secondary { background: #1c1c1c; border: 1px solid #3a3a3a; color: #cfcfcf; font-weight: 600; }
+    .gate-btn[hidden] { display: none; }
+    #gate-note { margin: 8px 0 0; color: #e3b341; font-size: 14px; line-height: 1.5; }
+    #gate-note[hidden] { display: none; }
     #status { margin: 0 0 18px; color: #9b9b9b; font-size: 13px; }
     .nft-card { display: flex; flex-direction: column; gap: 4px; padding: 24px 0; border-top: 1px solid #202020; }
     .nft-card:last-child { border-bottom: 1px solid #202020; }
@@ -325,6 +337,16 @@
   </style>
 </head>
 <body>
+  <!-- Access gate: only shown when opened as a Telegram miniapp (see app.js). -->
+  <div id="gate" hidden>
+    <div class="gate-box">
+      <p id="gate-text"></p>
+      <button id="gate-primary" class="gate-btn" type="button" hidden></button>
+      <button id="gate-secondary" class="gate-btn secondary" type="button" hidden></button>
+      <p id="gate-note" role="status" hidden></p>
+    </div>
+  </div>
+
   <button id="wallet-btn" type="button">
     <span class="icon-mask icon-wallet" aria-hidden="true"></span>
     <span id="wallet-btn-label">Connect Wallet</span>

@@ -179,3 +179,26 @@ Dopo aver deployato la collezione reale da `/deploycollection` (i valori
 disponibili nel riepilogo a schermo e nello `.zip` scaricato), aggiorna
 questi tre valori con quelli della tua collezione effettiva e imposta
 `tonChain` su `"Mainnet"` quando passi in produzione.
+
+## Accesso da Telegram (età + canale)
+
+Solo quando la mint app è aperta come miniapp da un bot Telegram
+(`Telegram.WebApp.initData` non vuoto) parte un controllo di accesso; da
+browser normale l'app si apre direttamente.
+
+1. Il frontend chiama `GET /api/channel-access` con `Authorization: tma <initData>`.
+2. Il server valida la firma di `initData` con il token del bot e chiede a
+   Telegram (`getChatMember`) se l'utente è iscritto al canale
+   (`channelChatId` in `src/config.js`).
+3. Iscritto → entra subito. Non iscritto → conferma maggiore età (ricordata
+   in `localStorage`), poi bottone "RICHIEDI ACCESSO PER CONTINUARE" che apre
+   `channelInviteLink`; dopo 2 secondi l'iscrizione viene ricontrollata.
+   Se non ancora accettato: "Aspetta di essere accettato e torna più tardi."
+
+Da configurare su Vercel: **`TELEGRAM_BOT_TOKEN`** (token del bot che lancia
+la miniapp). Quel bot deve essere **amministratore del canale**, altrimenti
+`getChatMember` non funziona e l'app resta bloccata con "Impossibile
+verificare l'accesso".
+
+Nota: il controllo è lato interfaccia; le API (catalogo, mint, immagini
+private) restano raggiungibili anche senza passare dal gate.

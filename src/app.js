@@ -1,5 +1,5 @@
 import { Address, beginCell, toNano } from "@ton/core";
-import { collectionAddress, nftsMetadataIndex, ownerAddress, tonChain } from "./config.js";
+import { channelInviteLink, collectionAddress, nftsMetadataIndex, ownerAddress, tonChain } from "./config.js";
 
 const state = {
   connected: false,
@@ -55,6 +55,11 @@ const debugContent = document.querySelector("#debug-report-content");
 const debugCopyButton = document.querySelector("#debug-report-copy");
 const debugCloseButton = document.querySelector("#debug-report-close");
 const withdrawButton = document.querySelector("#withdraw-btn");
+const gateNode = document.querySelector("#gate");
+const gateText = document.querySelector("#gate-text");
+const gatePrimary = document.querySelector("#gate-primary");
+const gateSecondary = document.querySelector("#gate-secondary");
+const gateNote = document.querySelector("#gate-note");
 const collectionNameNodes = document.querySelectorAll(".collection-name");
 const introContinueButton = document.querySelector("#intro-continue");
 const introMoreNodes = document.querySelectorAll(".intro-more");
@@ -946,11 +951,133 @@ async function checkAuthStatus() {
   }
 }
 
+// --- Access gate (Telegram miniapp only) ---------------------------------
+//
+// When the app is launched as a miniapp from a Telegram bot (initData is
+// non-empty), the user must be a member of the official channel. Members
+// enter directly. Everyone else first confirms being an adult, then asks to
+// join the channel; 2 seconds after pressing the button the membership is
+// checked again. Outside Telegram (plain browser) nothing of this applies.
+
+const AGE_CONFIRMED_KEY = "ageConfirmed";
+const GATE_RECHECK_DELAY_MS = 2000;
+
+function isAgeConfirmed() {
+  try {
+    return localStorage.getItem(AGE_CONFIRMED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberAgeConfirmed() {
+  try {
+    localStorage.setItem(AGE_CONFIRMED_KEY, "1");
+  } catch {
+    // Storage unavailable: the question will simply be asked again next time.
+  }
+}
+
+function setGate({ text, primary, secondary, note, primaryDisabled = false, onPrimary, onSecondary }) {
+  gateNode.hidden = false;
+  gateText.textContent = text || "";
+  gatePrimary.hidden = !primary;
+  gatePrimary.textContent = primary || "";
+  gatePrimary.disabled = primaryDisabled;
+  gatePrimary.onclick = onPrimary || null;
+  gateSecondary.hidden = !secondary;
+  gateSecondary.textContent = secondary || "";
+  gateSecondary.onclick = onSecondary || null;
+  gateNote.hidden = !note;
+  gateNote.textContent = note || "";
+}
+
+// Asks the server (which validates Telegram's signed initData) whether this
+// Telegram user is currently a member of the channel.
+async function fetchChannelMembership(tg) {
+  const response = await fetch("/api/channel-access", {
+    cache: "no-store",
+    headers: { authorization: `tma ${tg.initData}` },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || typeof payload?.member !== "boolean") throw new Error("membership check failed");
+  return payload.member;
+}
+
+function openChannelInvite(tg) {
+  if (typeof tg.openTelegramLink === "function") tg.openTelegramLink(channelInviteLink);
+  else window.open(channelInviteLink, "_blank", "noopener");
+}
+
+function unlockApp() {
+  gateNode.hidden = true;
+}
+
+function showGateError(tg) {
+  setGate({
+    text: "Impossibile verificare l'accesso. Riprova.",
+    primary: "Riprova",
+    onPrimary: () => runAccessGate(tg),
+  });
+}
+
+function showJoinStep(tg, note = "") {
+  setGate({
+    text: "Per continuare devi far parte del canale ufficiale di Cleo e Leo.",
+    primary: "RICHIEDI ACCESSO PER CONTINUARE",
+    note,
+    onPrimary: async () => {
+      setGate({ text: "Per continuare devi far parte del canale ufficiale di Cleo e Leo.", primary: "Verifica in corso...", primaryDisabled: true });
+      openChannelInvite(tg);
+      await new Promise((resolve) => setTimeout(resolve, GATE_RECHECK_DELAY_MS));
+      try {
+        if (await fetchChannelMembership(tg)) unlockApp();
+        else showJoinStep(tg, "Aspetta di essere accettato e torna più tardi.");
+      } catch {
+        showGateError(tg);
+      }
+    },
+  });
+}
+
+function showAgeStep(tg) {
+  setGate({
+    text: "Questa app contiene contenuti espliciti per adulti. Hai almeno 18 anni?",
+    primary: "Sì, ho almeno 18 anni",
+    secondary: "No",
+    onPrimary: () => {
+      rememberAgeConfirmed();
+      showJoinStep(tg);
+    },
+    onSecondary: () => {
+      setGate({ text: "L'accesso è consentito solo ai maggiorenni." });
+      if (typeof tg.close === "function") setTimeout(() => tg.close(), 1500);
+    },
+  });
+}
+
+async function runAccessGate(tg) {
+  setGate({ text: "Verifica in corso..." });
+  let member;
+  try {
+    member = await fetchChannelMembership(tg);
+  } catch {
+    showGateError(tg);
+    return;
+  }
+  if (member) unlockApp();
+  else if (isAgeConfirmed()) showJoinStep(tg);
+  else showAgeStep(tg);
+}
+
 function initTelegram() {
   const tg = window.Telegram?.WebApp;
   if (!tg) return;
   tg.ready();
   tg.expand();
+  // Non-empty initData = really launched from Telegram (in a normal
+  // browser the SDK loads too, but initData is empty).
+  if (tg.initData) runAccessGate(tg);
 }
 
 function initWallet() {
