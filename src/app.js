@@ -126,11 +126,12 @@ function renderCatalog() {
       card.append(image);
     }
 
-    const info = document.createElement("div");
-    info.className = "nft-info";
     const countdown = createText("p", "", "nft-countdown");
     countdown.dataset.countdownEnd = String(Date.parse(item.mintEndDate));
-    info.append(
+
+    // Visual order, top to bottom: image, name, price, remaining, countdown,
+    // mint button.
+    card.append(
       createText("h2", item.name, "nft-name"),
       createText("p", `${item.mintingPrice} TON`, "nft-price"),
       createText("p", `${item.remaining} remaining`, "nft-remaining"),
@@ -146,7 +147,7 @@ function renderCatalog() {
     button.textContent = "Mint";
     button.dataset.metadataIndex = String(item.metadataIndex);
     button.addEventListener("click", () => requestMint(item, button));
-    card.append(info, button);
+    card.append(button);
     catalogNode.append(card);
   }
 
