@@ -87,6 +87,20 @@ contract NftCollection {
         self.nextItemIndex = itemIndex + 1;
     }
 
+    // Lets the collection owner pull out the accumulated TON balance (mint
+    // proceeds minus what gets forwarded to each NftItem on deploy). Keeps a
+    // small reserve on the contract so it stays funded for storage rent.
+    receive(msg: Withdraw) {
+        require(sender() == self.owner, "only owner can withdraw");
+        nativeReserve(ton("0.05"), 0);
+        send(SendParameters{
+            to: self.owner,
+            value: 0,
+            mode: SendRemainingBalance | SendIgnoreErrors,
+            bounce: false,
+        });
+    }
+
     receive(msg: GetRoyaltyParams) {
         send(SendParameters{
             to: sender(),

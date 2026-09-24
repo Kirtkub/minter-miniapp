@@ -17,6 +17,14 @@ message(0x6d696e74) Mint {
     signature: Slice;
 }
 
+// Sent by the collection owner to pull the accumulated TON balance (mint
+// proceeds minus what was forwarded to NftItem deploys) out of the
+// collection contract. The collection only accepts this from `self.owner`;
+// see the `receive(msg: Withdraw)` handler in nft_collection.tact.
+message(0x77697468) Withdraw {
+    queryId: Int as uint64;
+}
+
 // Sent once, by the collection contract only, right after an NftItem child is deployed,
 // to set its real owner and content (the child's address only depends on its index and
 // the collection address, not on owner/content, so this must happen post-deploy).

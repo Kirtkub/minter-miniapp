@@ -18,6 +18,7 @@ const debugSection = document.querySelector("#debug-report");
 const debugContent = document.querySelector("#debug-report-content");
 const debugCopyButton = document.querySelector("#debug-report-copy");
 const debugCloseButton = document.querySelector("#debug-report-close");
+const withdrawButton = document.querySelector("#withdraw-btn");
 
 function setStatus(message = "") {
   statusNode.textContent = message;
@@ -101,6 +102,46 @@ async function loadCatalog() {
   } finally {
     state.loading = false;
     renderCatalog();
+  }
+}
+
+function buildWithdrawBody() {
+  const queryId = BigInt(Date.now());
+  return beginCell()
+    .storeUint(0x77697468, 32) // "with" — matches Withdraw in messages.tact
+    .storeUint(queryId, 64)
+    .endCell()
+    .toBoc()
+    .toString("base64");
+}
+
+// Sends the owner-only Withdraw message to the collection contract. The
+// contract itself checks `sender() == self.owner` — if the connected wallet
+// isn't the collection owner, the message just gets rejected/bounced (the
+// attached TON comes back, minus a small network fee). The 0.05 TON attached
+// here only covers gas; it's included in what comes back from the contract.
+async function withdrawFunds() {
+  if (!state.walletAddress || !tonConnectUI) {
+    setStatus("Connect a wallet first.");
+    return;
+  }
+  if (!window.confirm("Send the Withdraw message to the collection contract? This only works if the connected wallet is the collection owner.")) {
+    return;
+  }
+  try {
+    await tonConnectUI.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 300,
+      messages: [
+        {
+          address: collectionAddress,
+          amount: toNano("0.05").toString(),
+          payload: buildWithdrawBody(),
+        },
+      ],
+    });
+    setStatus("Withdraw message sent — check the collection balance on an explorer in a minute.");
+  } catch (error) {
+    setStatus(`Withdraw failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -387,4 +428,5 @@ window.addEventListener("DOMContentLoaded", () => {
   debugCloseButton?.addEventListener("click", () => {
     debugSection.hidden = true;
   });
+  withdrawButton?.addEventListener("click", () => withdrawFunds());
 });
