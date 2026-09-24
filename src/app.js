@@ -27,6 +27,12 @@ let countdownTimer = null;
 
 let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
+const walletButtonLabel = document.querySelector("#wallet-btn-label");
+const navButtons = document.querySelectorAll(".nav-btn");
+const pages = {
+  mint: document.querySelector("#page-mint"),
+  collection: document.querySelector("#page-collection"),
+};
 const authStatusButton = document.querySelector("#auth-status-btn");
 const authStatusLabel = document.querySelector("#auth-status-label");
 const statusNode = document.querySelector("#status");
@@ -40,6 +46,27 @@ const withdrawButton = document.querySelector("#withdraw-btn");
 function setStatus(message = "") {
   statusNode.textContent = message;
   statusNode.hidden = !message;
+}
+
+// --- Bottom nav: switch between "Mint and Reveal" and "My Collection" ---
+function showPage(name) {
+  Object.entries(pages).forEach(([key, node]) => {
+    if (!node) return;
+    node.hidden = key !== name;
+  });
+  navButtons.forEach((button) => {
+    const isActive = button.dataset.page === name;
+    button.classList.toggle("active", isActive);
+    if (isActive) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+}
+
+function initNav() {
+  navButtons.forEach((button) => {
+    button.addEventListener("click", () => showPage(button.dataset.page));
+  });
+  showPage("mint");
 }
 
 function isOwnerWallet() {
@@ -59,7 +86,7 @@ function updateWithdrawVisibility() {
 function setWalletState(wallet) {
   state.connected = Boolean(wallet);
   state.walletAddress = wallet?.account?.address || null;
-  walletButton.textContent = state.connected ? "Disconnect Wallet" : "Connect Wallet";
+  walletButtonLabel.textContent = state.connected ? "Disconnect" : "Connect Wallet";
   walletButton.classList.toggle("connected", state.connected);
   updateWithdrawVisibility();
   renderCatalog();
@@ -189,7 +216,7 @@ function renderCatalog() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mint-button";
-    button.textContent = "Mint";
+    button.textContent = "Minting and Reveal";
     button.dataset.metadataIndex = String(item.metadataIndex);
     button.addEventListener("click", () => requestMint(item, button));
     card.append(button);
@@ -551,6 +578,7 @@ function initWallet() {
 
 window.addEventListener("DOMContentLoaded", () => {
   initTelegram();
+  initNav();
   initWallet();
   loadCatalog();
   loadTonPrice();
