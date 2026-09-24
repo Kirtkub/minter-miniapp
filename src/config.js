@@ -10,3 +10,7 @@ export const tonChain = "Testnet";
 // miniapp): users must be adults and members of this channel.
 export const channelChatId = "-1001898840240";
 export const channelInviteLink = "https://t.me/+EToBLGdMi5c2ZjY0";
+
+// Public URL of the deployed miniapp (used e.g. by the "Open Miniapp" button
+// of the welcome message the bot sends in private chat).
+export const appUrl = "https://minter-miniapp.vercel.app/";

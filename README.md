@@ -191,9 +191,14 @@ browser normale l'app si apre direttamente.
    Telegram (`getChatMember`) se l'utente è iscritto al canale
    (`channelChatId` in `src/config.js`).
 3. Iscritto → entra subito. Non iscritto → conferma maggiore età (ricordata
-   in `localStorage`), poi bottone "RICHIEDI ACCESSO PER CONTINUARE" che apre
+   in `localStorage`), poi bottone "REQUEST ACCESS TO CONTINUE" che apre
    `channelInviteLink`; dopo 2 secondi l'iscrizione viene ricontrollata.
-   Se non ancora accettato: "Aspetta di essere accettato e torna più tardi."
+   Se non ancora accettato: "Wait to be accepted and come back later."
+4. Se dopo i 2 secondi l'utente risulta iscritto, il frontend chiama
+   `POST /api/welcome-message`: il server (dopo aver riverificato firma e
+   iscrizione) fa inviare al bot un messaggio in chat privata con il
+   bottone "Open Miniapp" che apre `appUrl` (`src/config.js`). L'utente deve
+   aver avviato il bot, cosa già vera se ha aperto la miniapp da lì.
 
 Da configurare su Vercel: **`TELEGRAM_BOT_TOKEN`** (token del bot che lancia
 la miniapp). Quel bot deve essere **amministratore del canale**, altrimenti

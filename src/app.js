@@ -1004,6 +1004,17 @@ async function fetchChannelMembership(tg) {
   return payload.member;
 }
 
+// Asks the server to send the "you've been accepted" message (with an
+// "Open Miniapp" button) in the user's private chat with the bot. Best
+// effort: the app doesn't wait for it and ignores failures.
+function sendWelcomeMessage(tg) {
+  fetch("/api/welcome-message", {
+    method: "POST",
+    cache: "no-store",
+    headers: { authorization: `tma ${tg.initData}` },
+  }).catch(() => {});
+}
+
 function openChannelInvite(tg) {
   if (typeof tg.openTelegramLink === "function") tg.openTelegramLink(channelInviteLink);
   else window.open(channelInviteLink, "_blank", "noopener");
@@ -1015,24 +1026,30 @@ function unlockApp() {
 
 function showGateError(tg) {
   setGate({
-    text: "Impossibile verificare l'accesso. Riprova.",
-    primary: "Riprova",
+    text: "Unable to verify access. Please try again.",
+    primary: "Try again",
     onPrimary: () => runAccessGate(tg),
   });
 }
 
+const JOIN_TEXT = "To continue you need to be a member of the official Cleo and Leo channel.";
+
 function showJoinStep(tg, note = "") {
   setGate({
-    text: "Per continuare devi far parte del canale ufficiale di Cleo e Leo.",
-    primary: "RICHIEDI ACCESSO PER CONTINUARE",
+    text: JOIN_TEXT,
+    primary: "REQUEST ACCESS TO CONTINUE",
     note,
     onPrimary: async () => {
-      setGate({ text: "Per continuare devi far parte del canale ufficiale di Cleo e Leo.", primary: "Verifica in corso...", primaryDisabled: true });
+      setGate({ text: JOIN_TEXT, primary: "Checking...", primaryDisabled: true });
       openChannelInvite(tg);
       await new Promise((resolve) => setTimeout(resolve, GATE_RECHECK_DELAY_MS));
       try {
-        if (await fetchChannelMembership(tg)) unlockApp();
-        else showJoinStep(tg, "Aspetta di essere accettato e torna più tardi.");
+        if (await fetchChannelMembership(tg)) {
+          sendWelcomeMessage(tg);
+          unlockApp();
+        } else {
+          showJoinStep(tg, "Wait to be accepted and come back later.");
+        }
       } catch {
         showGateError(tg);
       }
@@ -1042,22 +1059,22 @@ function showJoinStep(tg, note = "") {
 
 function showAgeStep(tg) {
   setGate({
-    text: "Questa app contiene contenuti espliciti per adulti. Hai almeno 18 anni?",
-    primary: "Sì, ho almeno 18 anni",
+    text: "This app contains explicit adult content. Are you at least 18 years old?",
+    primary: "Yes, I'm at least 18",
     secondary: "No",
     onPrimary: () => {
       rememberAgeConfirmed();
       showJoinStep(tg);
     },
     onSecondary: () => {
-      setGate({ text: "L'accesso è consentito solo ai maggiorenni." });
+      setGate({ text: "Access is only allowed to adults." });
       if (typeof tg.close === "function") setTimeout(() => tg.close(), 1500);
     },
   });
 }
 
 async function runAccessGate(tg) {
-  setGate({ text: "Verifica in corso..." });
+  setGate({ text: "Checking..." });
   let member;
   try {
     member = await fetchChannelMembership(tg);
