@@ -183,7 +183,10 @@
       margin-right: auto;
     }
 
-    /* --- Bottom navigation (fixed, centered, independent of scroll) ----- */
+    /* --- Bottom navigation (fixed, centered, independent of scroll) -----
+       Compact by default: icons only, so the bar stays small and out of
+       the way. Labels reveal themselves while the user scrolls down, then
+       fade back out ~2s after scrolling stops (see initNav in app.js). */
     #bottom-nav {
       position: fixed;
       left: 50%;
@@ -196,26 +199,41 @@
       border: 1px solid #2a2a2a;
       border-radius: 18px;
       z-index: 20;
+      transition: border-radius .2s ease;
     }
     .nav-btn {
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 5px;
-      min-width: 92px;
-      padding: 9px 14px;
+      gap: 0;
+      padding: 11px;
       background: transparent;
       border: none;
       border-radius: 13px;
       color: #7a7a7a;
       font-size: 11px;
       font-weight: 500;
-      transition: color .15s ease, background-color .15s ease;
+      transition: color .15s ease, background-color .15s ease, padding .2s ease;
     }
     .nav-btn:active { background: #1c1c1c; }
     .nav-btn.active { color: #f3f3f3; background: #1e1e1e; }
-    .nav-btn .icon-mask { width: 21px; height: 21px; }
+    .nav-btn .icon-mask { width: 21px; height: 21px; flex: none; }
+    .nav-btn span:last-child {
+      display: inline-block;
+      max-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      opacity: 0;
+      transition: max-width .2s ease, opacity .15s ease, margin-left .2s ease;
+    }
+    /* When the "labels" state is toggled on (via JS, while scrolling down),
+       expand each label back into view. */
+    #bottom-nav.show-labels .nav-btn { padding: 9px 14px; }
+    #bottom-nav.show-labels .nav-btn span:last-child {
+      max-width: 140px;
+      opacity: 1;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>

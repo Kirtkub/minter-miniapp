@@ -29,6 +29,7 @@ let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
 const walletButtonLabel = document.querySelector("#wallet-btn-label");
 const navButtons = document.querySelectorAll(".nav-btn");
+const bottomNav = document.querySelector("#bottom-nav");
 const pages = {
   mint: document.querySelector("#page-mint"),
   collection: document.querySelector("#page-collection"),
@@ -67,6 +68,36 @@ function initNav() {
     button.addEventListener("click", () => showPage(button.dataset.page));
   });
   showPage("mint");
+  initNavLabelReveal();
+}
+
+// --- Bottom nav labels: hidden by default (icons only, compact bar).
+// Revealed while the user scrolls down, then hidden again ~2s after
+// scrolling stops. Scrolling up (or being at the very top) keeps them
+// hidden so the bar never fights for attention.
+function initNavLabelReveal() {
+  if (!bottomNav) return;
+  let lastScrollY = window.scrollY;
+  let hideTimer = null;
+
+  const showLabels = () => {
+    bottomNav.classList.add("show-labels");
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      bottomNav.classList.remove("show-labels");
+      hideTimer = null;
+    }, 2000);
+  };
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > lastScrollY) showLabels();
+      lastScrollY = currentScrollY;
+    },
+    { passive: true },
+  );
 }
 
 function isOwnerWallet() {
@@ -216,7 +247,7 @@ function renderCatalog() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mint-button";
-    button.textContent = "Minting and Reveal";
+    button.textContent = "Mint and Reveal";
     button.dataset.metadataIndex = String(item.metadataIndex);
     button.addEventListener("click", () => requestMint(item, button));
     card.append(button);
