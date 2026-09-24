@@ -63,7 +63,12 @@
     .nft-card:last-child { border-bottom: 1px solid #202020; }
     .nft-image { width: 100%; aspect-ratio: 1 / 1; border-radius: 16px; object-fit: cover; background: #141414; margin-bottom: 10px; }
     .nft-name { margin: 0; color: #f3f3f3; font-size: 20px; font-weight: 500; }
-    .nft-price, .nft-remaining { margin: 0; color: #909090; font-size: 14px; }
+    .nft-price { display: flex; align-items: center; gap: 7px; margin: 6px 0 0; }
+    .gram-icon { display: inline-flex; flex: none; }
+    .gram-icon svg { display: block; }
+    .price-amount { font-weight: 700; font-size: 18px; color: #f3f3f3; }
+    .price-usd { font-weight: 400; font-size: 13px; color: #8c8c8c; }
+    .nft-remaining { margin: 4px 0 0; color: #909090; font-size: 14px; }
     .nft-countdown { margin: 6px 0 14px; font-weight: 700; font-size: 15px; color: #e3b341; }
     .mint-button { width: 100%; padding: 16px; background: #141414; border: 1px solid #2a2a2a; border-radius: 12px; font-size: 16px; font-weight: 600; }
     .mint-button:disabled { cursor: default; opacity: .6; }
