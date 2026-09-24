@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run compile:contracts && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "public",
   "rewrites": [
     { "source": "/deploycollection", "destination": "/deploycollection/index.html" },
