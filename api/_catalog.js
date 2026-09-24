@@ -85,6 +85,7 @@ function parseItem(raw, metadataIndex, contentUrl) {
     metadataIndex,
     contentUrl,
     name: raw.name,
+    image: typeof raw.image === "string" ? raw.image : null,
     mintingPrice,
     maxSupply,
     mintStartDate: new Date(start).toISOString(),

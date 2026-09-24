@@ -1,5 +1,5 @@
 import { Address, beginCell, toNano } from "@ton/core";
-import { collectionAddress, nftsMetadataIndex, tonChain } from "./config.js";
+import { collectionAddress, nftsMetadataIndex, ownerAddress, tonChain } from "./config.js";
 
 const state = {
   connected: false,
@@ -7,6 +7,14 @@ const state = {
   items: [],
   loading: false,
 };
+
+// Set when the user clicks "Mint" while no wallet is connected: remembers
+// which item to mint automatically once a wallet connects, so the click
+// isn't just discarded. Expires after a few minutes so that connecting a
+// wallet much later (after giving up / closing the connect modal) doesn't
+// unexpectedly trigger an old mint attempt.
+let pendingMint = null;
+let countdownTimer = null;
 
 let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
@@ -25,12 +33,40 @@ function setStatus(message = "") {
   statusNode.hidden = !message;
 }
 
+function isOwnerWallet() {
+  if (!state.walletAddress) return false;
+  try {
+    return Address.parse(state.walletAddress).equals(Address.parse(ownerAddress));
+  } catch {
+    return false;
+  }
+}
+
+function updateWithdrawVisibility() {
+  if (!withdrawButton) return;
+  withdrawButton.hidden = !isOwnerWallet();
+}
+
 function setWalletState(wallet) {
   state.connected = Boolean(wallet);
   state.walletAddress = wallet?.account?.address || null;
   walletButton.textContent = state.connected ? "Disconnect Wallet" : "Connect Wallet";
   walletButton.classList.toggle("connected", state.connected);
+  updateWithdrawVisibility();
   renderCatalog();
+
+  // If the wallet just connected because the user clicked "Mint" while
+  // disconnected, pick up where they left off.
+  if (state.connected && pendingMint && pendingMint.expiresAt > Date.now()) {
+    const item = state.items.find((candidate) => candidate.metadataIndex === pendingMint.metadataIndex);
+    pendingMint = null;
+    if (item) {
+      const button = catalogNode.querySelector(`[data-metadata-index="${item.metadataIndex}"]`);
+      if (button) mint(item, button);
+    }
+  } else {
+    pendingMint = null;
+  }
 }
 
 function formatAddress(address) {
@@ -48,6 +84,24 @@ function createText(tag, text, className) {
   return node;
 }
 
+function formatCountdown(msRemaining) {
+  if (msRemaining <= 0) return "Minting closed";
+  const totalSeconds = Math.floor(msRemaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${days}d ${hours}h ${minutes}m ${seconds}s left`;
+}
+
+function tickCountdowns() {
+  const now = Date.now();
+  catalogNode.querySelectorAll("[data-countdown-end]").forEach((node) => {
+    const end = Number(node.dataset.countdownEnd);
+    node.textContent = formatCountdown(end - now);
+  });
+}
+
 function renderCatalog() {
   catalogNode.replaceChildren();
   if (state.loading) {
@@ -62,21 +116,52 @@ function renderCatalog() {
   for (const item of state.items) {
     const card = document.createElement("article");
     card.className = "nft-card";
-    const details = document.createElement("div");
-    details.append(
+
+    if (item.image) {
+      const image = document.createElement("img");
+      image.className = "nft-image";
+      image.src = item.image;
+      image.alt = item.name;
+      image.loading = "lazy";
+      card.append(image);
+    }
+
+    const info = document.createElement("div");
+    info.className = "nft-info";
+    const countdown = createText("p", "", "nft-countdown");
+    countdown.dataset.countdownEnd = String(Date.parse(item.mintEndDate));
+    info.append(
       createText("h2", item.name, "nft-name"),
-      createText("p", `${item.mintingPrice} GRAM`, "nft-price"),
+      createText("p", `${item.mintingPrice} TON`, "nft-price"),
       createText("p", `${item.remaining} remaining`, "nft-remaining"),
+      countdown,
     );
+
+    // Mint buttons are never disabled for being logged out — clicking one
+    // while disconnected opens the wallet connect modal instead, and the
+    // mint resumes automatically once the wallet connects (see setWalletState).
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mint-button";
     button.textContent = "Mint";
-    button.disabled = !state.connected;
-    button.addEventListener("click", () => mint(item, button));
-    card.append(details, button);
+    button.dataset.metadataIndex = String(item.metadataIndex);
+    button.addEventListener("click", () => requestMint(item, button));
+    card.append(info, button);
     catalogNode.append(card);
   }
+
+  tickCountdowns();
+  if (!countdownTimer) countdownTimer = setInterval(tickCountdowns, 1000);
+}
+
+function requestMint(item, button) {
+  if (!state.connected) {
+    pendingMint = { metadataIndex: item.metadataIndex, expiresAt: Date.now() + 2 * 60 * 1000 };
+    setStatus(`Connect your wallet to mint "${item.name}".`);
+    tonConnectUI.openModal();
+    return;
+  }
+  mint(item, button);
 }
 
 async function loadCatalog() {
