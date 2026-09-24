@@ -140,8 +140,9 @@ function setWalletState(wallet) {
     state.myItems = [];
     state.myCollectionError = null;
     state.myCollectionLoadedFor = null;
-    if (!pages.collection.hidden) loadMyCollection();
-    else renderMyCollection();
+    // Owned NFTs are needed on the "Mint and Reveal" page too (revealed
+    // image, "Mint another copy"), so load them whatever page is open.
+    loadMyCollection();
   }
 
   // If the wallet just connected because the user clicked "Mint" while
@@ -227,6 +228,12 @@ function tickCountdowns() {
   });
 }
 
+// Copies of a catalog entry the connected wallet already owns. Owned NFTs
+// are matched to catalog entries through their metadata URL (contentUrl).
+function ownedCopies(item) {
+  return state.myItems.filter((owned) => owned.contentUrl && owned.contentUrl === item.contentUrl);
+}
+
 function renderCatalog() {
   catalogNode.replaceChildren();
   if (state.loading) {
@@ -242,10 +249,16 @@ function renderCatalog() {
     const card = document.createElement("article");
     card.className = "nft-card";
 
-    if (item.image) {
+    // If the user owns at least one copy, show the revealed (private) image
+    // instead of the public one.
+    const owned = ownedCopies(item);
+    const revealed = owned.find((copy) => copy.hasPrivateImage);
+    const imageSrc = revealed ? revealed.privateImageUrl : item.image;
+
+    if (imageSrc) {
       const image = document.createElement("img");
       image.className = "nft-image";
-      image.src = item.image;
+      image.src = imageSrc;
       image.alt = item.name;
       image.loading = "lazy";
       card.append(image);
@@ -273,11 +286,26 @@ function renderCatalog() {
     // mint resumes automatically once the wallet connects (see setWalletState).
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "mint-button";
-    button.textContent = "Mint and Reveal";
+    button.className = owned.length > 0 ? "mint-button owned" : "mint-button";
+    button.textContent = owned.length > 0 ? "Mint another copy" : "Mint and Reveal";
     button.dataset.metadataIndex = String(item.metadataIndex);
     button.addEventListener("click", () => requestMint(item, button));
     card.append(button);
+
+    if (owned.length > 0) {
+      const linkLine = document.createElement("p");
+      linkLine.className = "open-in-collection";
+      const link = document.createElement("a");
+      link.href = "#page-collection";
+      link.textContent = "Open NFT in my collection";
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        showPage("collection");
+        window.scrollTo({ top: 0 });
+      });
+      linkLine.append(link);
+      card.append(linkLine);
+    }
     catalogNode.append(card);
   }
 
@@ -343,6 +371,9 @@ async function loadMyCollection() {
     return;
   }
 
+  const ownedSignature = () => state.myItems.map((entry) => entry.itemAddress).join(",");
+  const signatureBefore = ownedSignature();
+
   state.myCollectionLoading = true;
   renderMyCollection();
   try {
@@ -360,7 +391,25 @@ async function loadMyCollection() {
     state.myCollectionLoading = false;
     state.myCollectionLoadedFor = state.walletAddress;
     renderMyCollection();
+    // Owned copies change the "Mint and Reveal" cards (image, button).
+    if (ownedSignature() !== signatureBefore) renderCatalog();
   }
+}
+
+// After a mint the new NFT appears on-chain (and in the indexer) after a
+// little while: re-check "My Collection" every few seconds until the number
+// of owned copies grows, or give up after ~90 seconds.
+function refreshCollectionAfterMint(item) {
+  const before = ownedCopies(item).length;
+  let attempts = 0;
+  const tick = async () => {
+    attempts += 1;
+    state.myCollectionLoadedFor = null;
+    await loadMyCollection();
+    if (ownedCopies(item).length > before || attempts >= 9) return;
+    setTimeout(tick, 10000);
+  };
+  setTimeout(tick, 10000);
 }
 
 function openLightbox(imageUrl) {
@@ -373,46 +422,95 @@ function closeLightbox() {
   lightboxImage.src = "";
 }
 
-// Downloads the revealed image to the device. Prefers Telegram's native
-// download-to-device API when available (best chance of landing in the
-// phone's gallery/Files app from inside the Telegram webview); falls back
-// to a plain same-origin blob download everywhere else.
+// Downloads the revealed image to the device.
+//
+// Telegram's native `downloadFile` only exists from Bot API 8.0: on older
+// clients (and on some platforms) calling it fails with
+// "WebAppMethodUnsupported". So it is used only when supported, and every
+// other environment gets a fallback, in this order:
+//   1. Telegram downloadFile (Bot API >= 8.0, needs an absolute https URL)
+//   2. Web Share sheet with the image file (lets the user "Save Image")
+//   3. Inside Telegram: open the image URL in the external browser, where it
+//      can be saved (Telegram's webview ignores <a download>)
+//   4. Regular browsers: same-origin blob download
+function isTelegramDownloadSupported(tg) {
+  return (
+    typeof tg?.downloadFile === "function" &&
+    typeof tg.isVersionAtLeast === "function" &&
+    tg.isVersionAtLeast("8.0")
+  );
+}
+
+function telegramDownloadFile(tg, url, fileName) {
+  return new Promise((resolve, reject) => {
+    try {
+      tg.downloadFile({ url, file_name: fileName }, (accepted) => {
+        if (accepted) resolve();
+        else reject(new Error("cancelled"));
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 async function downloadRevealedImage(item, button) {
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "Downloading...";
   try {
     const tg = window.Telegram?.WebApp;
-    const filename = `${item.name.replace(/[^a-z0-9-_]+/gi, "_") || "nft"}.jpg`;
-    if (tg?.downloadFile) {
-      await new Promise((resolve, reject) => {
-        try {
-          tg.downloadFile({ url: item.privateImageUrl, file_name: filename }, (accepted) => {
-            if (accepted) resolve();
-            else reject(new Error("cancelled"));
-          });
-        } catch (error) {
-          reject(error);
-        }
-      });
-      return;
+    const insideTelegram = Boolean(tg?.initData);
+    const baseName = item.name.replace(/[^a-z0-9-_]+/gi, "_") || "nft";
+    const absoluteUrl = new URL(item.privateImageUrl, window.location.origin).href;
+
+    // 1) Telegram native download.
+    if (isTelegramDownloadSupported(tg)) {
+      try {
+        await telegramDownloadFile(tg, absoluteUrl, `${baseName}.${item.privateImageExt || "jpg"}`);
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.message === "cancelled") return;
+        // Any other failure: fall through to the other strategies.
+      }
     }
+
+    // The remaining strategies need the actual bytes.
     const response = await fetch(item.privateImageUrl, { cache: "no-store" });
     if (!response.ok) throw new Error("Download failed");
     const blob = await response.blob();
+    const extension = (blob.type.split("/")[1] || item.privateImageExt || "jpg").replace("jpeg", "jpg");
+    const fileName = `${baseName}.${extension}`;
+
+    // 2) Share sheet with the file (mobile webviews: "Save Image", Files...).
+    try {
+      const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: item.name });
+        return;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return; // user closed the share sheet
+      // Share unavailable/failed: fall through.
+    }
+
+    // 3) Telegram without a working native download: open in the browser.
+    if (insideTelegram && typeof tg.openLink === "function") {
+      tg.openLink(absoluteUrl);
+      return;
+    }
+
+    // 4) Regular browser download.
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = filename;
+    link.download = fileName;
     document.body.append(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
   } catch (error) {
-    // A cancelled Telegram download isn't an error worth alerting about.
-    if (!(error instanceof Error) || error.message !== "cancelled") {
-      window.alert(`Unable to download the image: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    window.alert(`Unable to download the image: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     button.disabled = false;
     button.textContent = originalLabel;
@@ -438,7 +536,7 @@ function renderMyCollection() {
     myCollectionNode.append(createText("p", "Connect your wallet to see your collection.", "catalog-message"));
     return;
   }
-  if (state.myCollectionLoading) {
+  if (state.myCollectionLoading && state.myItems.length === 0) {
     setCollectionStatus("");
     myCollectionNode.append(createText("p", "Loading your collection.", "catalog-message"));
     return;
@@ -730,6 +828,7 @@ async function mint(item, button) {
 
     outcome = "success";
     setStatus("Transaction sent.");
+    refreshCollectionAfterMint(item);
     await loadCatalog();
   } catch (error) {
     caughtError = error;

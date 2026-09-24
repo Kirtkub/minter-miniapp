@@ -8,6 +8,17 @@ const MAX_ITEMS = 200;
 // How many get_nft_data() calls to run in parallel.
 const CONCURRENCY = 6;
 
+// Only the extension of the private image is exposed (never its URL), so the
+// download gets a correctly named file.
+function fileExtension(url) {
+  try {
+    const match = new URL(url).pathname.match(/\.(jpe?g|png|webp|gif)$/i);
+    return match ? match[1].toLowerCase() : "jpg";
+  } catch {
+    return "jpg";
+  }
+}
+
 function getgemsBase() {
   return tonChain === "Testnet" ? "https://testnet.getgems.io" : "https://getgems.io";
 }
@@ -84,9 +95,15 @@ export default async function handler(req, res) {
       const friendlyAddress = Address.parse(item.itemAddress).toString({
         testOnly: tonChain === "Testnet",
       });
+      const privateImageRaw =
+        metadata && typeof metadata.privateImage === "string" ? metadata.privateImage : "";
       return {
         itemAddress: friendlyAddress,
         index: item.index,
+        // Public metadata URL (the same one listed in the mint catalog): lets
+        // the frontend match owned copies to catalog entries.
+        contentUrl: item.contentUrl,
+        privateImageExt: fileExtension(privateImageRaw),
         name: (metadata && typeof metadata.name === "string" && metadata.name) || `NFT #${item.index}`,
         hasPrivateImage: Boolean(metadata && typeof metadata.privateImage === "string" && metadata.privateImage),
         privateImageUrl: `/api/private-image?item=${encodeURIComponent(friendlyAddress)}&owner=${encodeURIComponent(owner)}`,
