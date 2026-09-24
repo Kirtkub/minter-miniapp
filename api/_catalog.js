@@ -70,7 +70,7 @@ function parseItem(raw, metadataIndex, contentUrl) {
   if (
     !raw ||
     typeof raw.name !== "string" ||
-    !Number.isSafeInteger(mintingPrice) ||
+    !Number.isFinite(mintingPrice) ||
     mintingPrice <= 0 ||
     !Number.isSafeInteger(maxSupply) ||
     maxSupply <= 0 ||

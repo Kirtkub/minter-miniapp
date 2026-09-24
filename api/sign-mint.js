@@ -99,7 +99,7 @@ async function getMintingItem(metadataIndex) {
   const start = Date.parse(raw?.mintStartDate);
   const end = Date.parse(raw?.mintEndDate);
   if (
-    !Number.isSafeInteger(mintingPrice) ||
+    !Number.isFinite(mintingPrice) ||
     mintingPrice <= 0 ||
     !Number.isSafeInteger(maxSupply) ||
     maxSupply <= 0 ||
