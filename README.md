@@ -207,3 +207,22 @@ verificare l'accesso".
 
 Nota: il controllo è lato interfaccia; le API (catalogo, mint, immagini
 private) restano raggiungibili anche senza passare dal gate.
+
+## Notifica di mint su Telegram
+
+Solo dentro Telegram (`initData` non vuoto): niente più debug report dopo il
+mint, ma un popup "NFT minted successfully!" / "Error during minting,
+please try again."; il bottone "authorized/unauthorized" in alto a destra è
+nascosto.
+
+Quando `refreshCollectionAfterMint` rileva la nuova copia posseduta, il
+frontend chiama `POST /api/mint-notify` con `itemAddress` e `ownerAddress`
+(più `Authorization: tma <initData>`). Il server riverifica su chain che
+`ownerAddress` possiede davvero `itemAddress` in questa collezione (stesso
+controllo di `private-image.js`), poi scarica l'immagine privata con
+`NETLIFY_PRIVATE_SECRET` e la invia con `sendPhoto` in chat privata con
+l'utente, con didascalia "You've got a new Spicy Pic added to your
+collection!" + nome dell'NFT, e il bottone "Open Miniapp" (`appUrl`). Se
+l'NFT non ha un'immagine privata configurata, invia solo il messaggio di
+testo. Fallisce in silenzio (loggato, non mostrato all'utente): il mint è
+già andato a buon fine comunque.

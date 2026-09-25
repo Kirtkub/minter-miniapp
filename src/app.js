@@ -31,6 +31,10 @@ const GRAM_ICON_HTML =
 // unexpectedly trigger an old mint attempt.
 let pendingMint = null;
 let countdownTimer = null;
+// Set once by initTelegram(): true only when launched as a Telegram
+// miniapp (non-empty initData), not when the SDK merely loaded in a
+// regular browser.
+let insideTelegram = false;
 
 let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
@@ -42,6 +46,10 @@ const accountCopy = document.querySelector("#account-copy");
 const accountGetgemsLink = document.querySelector("#account-getgems-link");
 const accountNftCount = document.querySelector("#account-nft-count");
 const accountDisconnect = document.querySelector("#account-disconnect");
+const mintResultModal = document.querySelector("#mint-result-modal");
+const mintResultBox = document.querySelector("#mint-result-box");
+const mintResultText = document.querySelector("#mint-result-text");
+const mintResultClose = document.querySelector("#mint-result-close");
 const navButtons = document.querySelectorAll(".nav-btn");
 const bottomNav = document.querySelector("#bottom-nav");
 const pages = {
@@ -533,13 +541,18 @@ async function loadMyCollection() {
 // little while: re-check "My Collection" every few seconds until the number
 // of owned copies grows, or give up after ~90 seconds.
 function refreshCollectionAfterMint(item) {
-  const before = ownedCopies(item).length;
+  const beforeAddresses = new Set(ownedCopies(item).map((copy) => copy.itemAddress));
   let attempts = 0;
   const tick = async () => {
     attempts += 1;
     state.myCollectionLoadedFor = null;
     await loadMyCollection();
-    if (ownedCopies(item).length > before || attempts >= 9) return;
+    const newCopy = ownedCopies(item).find((copy) => !beforeAddresses.has(copy.itemAddress));
+    if (newCopy) {
+      notifyMintTelegram(newCopy.itemAddress);
+      return;
+    }
+    if (attempts >= 9) return;
     setTimeout(tick, 10000);
   };
   setTimeout(tick, 10000);
@@ -896,6 +909,27 @@ function buildMintReport(ctx) {
   return lines.join("\n");
 }
 
+function showMintResult(success) {
+  mintResultBox.classList.toggle("error", !success);
+  mintResultText.textContent = success
+    ? "NFT minted successfully!"
+    : "Error during minting, please try again.";
+  mintResultModal.hidden = false;
+}
+
+// Tells the server to send the "new Spicy Pic" Telegram message for the
+// newly minted item. Best effort: failures are logged only, never shown to
+// the user — the mint itself already succeeded.
+function notifyMintTelegram(itemAddress) {
+  if (!insideTelegram || !state.walletAddress) return;
+  const tg = window.Telegram?.WebApp;
+  fetch("/api/mint-notify", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `tma ${tg.initData}` },
+    body: JSON.stringify({ itemAddress, ownerAddress: state.walletAddress }),
+  }).catch((error) => console.error("mint_notify_request_error", error));
+}
+
 function showMintReport(text) {
   if (!debugSection || !debugContent) return;
   debugContent.textContent = text;
@@ -978,21 +1012,25 @@ async function mint(item, button) {
     const message = error instanceof Error ? error.message : String(error);
     const debugMessage = `Mint failed during ${stage}.\n\n${message}`;
     setStatus(debugMessage);
-    window.alert(debugMessage);
+    if (!insideTelegram) window.alert(debugMessage);
   } finally {
-    const report = buildMintReport({
-      stage,
-      outcome,
-      item,
-      authorization,
-      amountNanoTon,
-      payloadBase64,
-      walletTxResult,
-      error: caughtError,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-    });
-    showMintReport(report);
+    if (insideTelegram) {
+      showMintResult(outcome === "success");
+    } else {
+      const report = buildMintReport({
+        stage,
+        outcome,
+        item,
+        authorization,
+        amountNanoTon,
+        payloadBase64,
+        walletTxResult,
+        error: caughtError,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      });
+      showMintReport(report);
+    }
     button.disabled = false;
   }
 }
@@ -1162,7 +1200,12 @@ function initTelegram() {
   tg.expand();
   // Non-empty initData = really launched from Telegram (in a normal
   // browser the SDK loads too, but initData is empty).
-  if (tg.initData) runAccessGate(tg);
+  insideTelegram = Boolean(tg.initData);
+  if (insideTelegram) {
+    // Developer-only affordance, not meant for end users inside Telegram.
+    authStatusButton.hidden = true;
+    runAccessGate(tg);
+  }
 }
 
 function initWallet() {
@@ -1207,7 +1250,10 @@ window.addEventListener("DOMContentLoaded", () => {
   loadCatalog();
   loadTonPrice();
   authStatusButton.addEventListener("click", () => checkAuthStatus());
-  checkAuthStatus();
+  if (!insideTelegram) checkAuthStatus();
+  mintResultClose.addEventListener("click", () => {
+    mintResultModal.hidden = true;
+  });
   debugCopyButton?.addEventListener("click", () => copyMintReport());
   debugCloseButton?.addEventListener("click", () => {
     debugSection.hidden = true;

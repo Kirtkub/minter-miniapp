@@ -119,6 +119,16 @@
     .account-disconnect:active { background: rgba(229,72,77,.1); }
     .account-disconnect .icon-wallet { width: 15px; height: 15px; }
 
+    /* --- Mint result modal (Telegram only: replaces the debug report) ---- */
+    #mint-result-modal { position: fixed; inset: 0; z-index: 95; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); padding: 24px; }
+    #mint-result-modal[hidden] { display: none; }
+    .mint-result-box { width: min(100%, 380px); background: #121212; border: 1px solid #262626; border-radius: 20px; padding: 28px 24px; text-align: center; }
+    #mint-result-text { margin: 0 0 20px; color: #f3f3f3; font-size: 16px; line-height: 1.5; }
+    #mint-result-close { width: 100%; padding: 14px 16px; background: #30A1F5; border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 700; }
+    #mint-result-close:active { background: #2790dd; }
+    .mint-result-box.error #mint-result-close { background: #e5484d; }
+    .mint-result-box.error #mint-result-close:active { background: #cf3f44; }
+
     #auth-status-btn {
       position: fixed;
       top: max(12px, env(safe-area-inset-top));
@@ -431,6 +441,14 @@
     <span class="dot"></span>
     <span id="auth-status-label">Checking...</span>
   </button>
+
+  <!-- Mint result modal (Telegram only: replaces the debug report). -->
+  <div id="mint-result-modal" hidden>
+    <div id="mint-result-box" class="mint-result-box">
+      <p id="mint-result-text"></p>
+      <button id="mint-result-close" type="button">OK</button>
+    </div>
+  </div>
   <main>
     <section id="page-mint" class="page" data-page="mint">
       <p class="eyebrow collection-name"></p>
