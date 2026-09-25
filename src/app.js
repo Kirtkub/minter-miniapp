@@ -210,6 +210,35 @@ function updateWithdrawVisibility() {
   withdrawButton.hidden = !isOwnerWallet();
 }
 
+// navigator.clipboard.writeText needs a secure context and, inside an
+// embedded webview like Telegram's, is sometimes blocked outright even on
+// https. Fall back to the old execCommand("copy") trick (works in more
+// webviews) so the button does something instead of silently failing.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    throw new Error("clipboard API unavailable");
+  } catch {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.append(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand("copy");
+      textarea.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function getgemsUserUrl(address) {
   const base = tonChain === "Testnet" ? "https://testnet.getgems.io" : "https://getgems.io";
   return `${base}/user/${address}`;
@@ -1158,13 +1187,10 @@ function initWallet() {
   });
   accountCopy.addEventListener("click", async () => {
     if (!state.walletAddress) return;
-    try {
-      await navigator.clipboard.writeText(formatAddress(state.walletAddress));
-      accountCopy.classList.add("copied");
-      setTimeout(() => accountCopy.classList.remove("copied"), 1500);
-    } catch {
-      // Clipboard unavailable: nothing else to do.
-    }
+    const ok = await copyToClipboard(formatAddress(state.walletAddress));
+    accountCopy.classList.remove("copied", "copy-error");
+    accountCopy.classList.add(ok ? "copied" : "copy-error");
+    setTimeout(() => accountCopy.classList.remove("copied", "copy-error"), 1500);
   });
   accountDisconnect.addEventListener("click", () => {
     accountModal.hidden = true;
