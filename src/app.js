@@ -35,6 +35,13 @@ let countdownTimer = null;
 let tonConnectUI;
 const walletButton = document.querySelector("#wallet-btn");
 const walletButtonLabel = document.querySelector("#wallet-btn-label");
+const accountModal = document.querySelector("#account-modal");
+const accountClose = document.querySelector("#account-close");
+const accountAddress = document.querySelector("#account-address");
+const accountCopy = document.querySelector("#account-copy");
+const accountGetgemsLink = document.querySelector("#account-getgems-link");
+const accountNftCount = document.querySelector("#account-nft-count");
+const accountDisconnect = document.querySelector("#account-disconnect");
 const navButtons = document.querySelectorAll(".nav-btn");
 const bottomNav = document.querySelector("#bottom-nav");
 const pages = {
@@ -128,6 +135,36 @@ function initNav() {
   });
   showPage("mint");
   initNavLabelReveal();
+  initWalletButtonReveal();
+}
+
+// While disconnected, the wallet button is icon-only by default. Scrolling
+// up expands it to icon + "Connect Wallet", then the label hides again ~2s
+// after the user stops scrolling up (mirrors initNavLabelReveal, but on the
+// opposite scroll direction, and only while disconnected).
+function initWalletButtonReveal() {
+  let lastScrollY = window.scrollY;
+  let hideTimer = null;
+
+  const showLabel = () => {
+    if (state.connected) return;
+    walletButton.classList.add("expanded");
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      walletButton.classList.remove("expanded");
+      hideTimer = null;
+    }, 2000);
+  };
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < lastScrollY) showLabel();
+      lastScrollY = currentScrollY;
+    },
+    { passive: true },
+  );
 }
 
 // --- Bottom nav labels: hidden by default (icons only, compact bar).
@@ -173,12 +210,33 @@ function updateWithdrawVisibility() {
   withdrawButton.hidden = !isOwnerWallet();
 }
 
+function getgemsUserUrl(address) {
+  const base = tonChain === "Testnet" ? "https://testnet.getgems.io" : "https://getgems.io";
+  return `${base}/user/${address}`;
+}
+
+function renderAccountPanel() {
+  if (!state.walletAddress) return;
+  accountAddress.textContent = formatAddress(state.walletAddress);
+  accountGetgemsLink.href = getgemsUserUrl(state.walletAddress);
+  accountNftCount.textContent = String(state.myItems.length);
+}
+
 function setWalletState(wallet) {
   const previousAddress = state.walletAddress;
   state.connected = Boolean(wallet);
   state.walletAddress = wallet?.account?.address || null;
-  walletButtonLabel.textContent = state.connected ? "Disconnect" : "Connect Wallet";
+  // Connected: icon-only button that opens the account panel. Disconnected:
+  // "Connect Wallet" (icon + label, expanded on scroll-up).
+  walletButtonLabel.textContent = "Connect Wallet";
   walletButton.classList.toggle("connected", state.connected);
+  walletButton.classList.remove("expanded");
+  const walletIcon = walletButton.querySelector(".icon-wallet, .icon-user");
+  if (walletIcon) {
+    walletIcon.classList.toggle("icon-wallet", !state.connected);
+    walletIcon.classList.toggle("icon-user", state.connected);
+  }
+  if (!state.connected) accountModal.hidden = true;
   updateWithdrawVisibility();
   renderCatalog();
 
@@ -1085,8 +1143,32 @@ function initWallet() {
   tonConnectUI.onStatusChange((wallet) => setWalletState(wallet));
   tonConnectUI.connectionRestored.then(() => setWalletState(tonConnectUI.wallet));
   walletButton.addEventListener("click", () => {
-    if (tonConnectUI.connected) tonConnectUI.disconnect();
-    else tonConnectUI.openModal();
+    if (state.connected) {
+      renderAccountPanel();
+      accountModal.hidden = false;
+    } else {
+      tonConnectUI.openModal();
+    }
+  });
+  accountClose.addEventListener("click", () => {
+    accountModal.hidden = true;
+  });
+  accountModal.addEventListener("click", (event) => {
+    if (event.target === accountModal) accountModal.hidden = true;
+  });
+  accountCopy.addEventListener("click", async () => {
+    if (!state.walletAddress) return;
+    try {
+      await navigator.clipboard.writeText(formatAddress(state.walletAddress));
+      accountCopy.classList.add("copied");
+      setTimeout(() => accountCopy.classList.remove("copied"), 1500);
+    } catch {
+      // Clipboard unavailable: nothing else to do.
+    }
+  });
+  accountDisconnect.addEventListener("click", () => {
+    accountModal.hidden = true;
+    tonConnectUI.disconnect();
   });
 }
 

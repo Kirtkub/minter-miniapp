@@ -46,6 +46,19 @@
       -webkit-mask-image: url('/icons/icon-wallet.png');
       mask-image: url('/icons/icon-wallet.png');
     }
+    /* Inline SVG (no separate asset file needed), masked like the PNG icons. */
+    .icon-user {
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
+    }
+    .icon-close {
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.3 19.7l-1.41-1.41L9.17 12 2.89 5.71 4.3 4.3l6.29 6.3 6.29-6.3z'/%3E%3C/svg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.3 19.7l-1.41-1.41L9.17 12 2.89 5.71 4.3 4.3l6.29 6.3 6.29-6.3z'/%3E%3C/svg%3E");
+    }
+    .icon-copy {
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/%3E%3C/svg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/%3E%3C/svg%3E");
+    }
     .icon-mint-and-reveal {
       -webkit-mask-image: url('/icons/icon-mint-and-reveal.png');
       mask-image: url('/icons/icon-mint-and-reveal.png');
@@ -55,7 +68,11 @@
       mask-image: url('/icons/icon-my-collection.png');
     }
 
-    /* --- Wallet connect button (top right, fixed) ----------------------- */
+    /* --- Wallet connect / account button (top right, fixed) -------------- *
+     * Icon-only by default (compact). While disconnected, scrolling up
+     * expands it to icon + "Connect Wallet" label; the label hides again
+     * ~2s after the user stops scrolling up. Once connected, the button
+     * shows a user icon instead and opens the account panel. */
     #wallet-btn {
       position: fixed;
       top: max(12px, env(safe-area-inset-top));
@@ -63,18 +80,43 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 16px;
+      padding: 10px;
       font-size: 13px;
       font-weight: 500;
       background: #141414;
       border: 1px solid #5a5a5a;
-      border-radius: 8px;
+      border-radius: 999px;
       color: #cfcfcf;
       z-index: 20;
+      transition: border-radius .15s ease, padding .15s ease;
     }
     #wallet-btn:active { background: #1c1c1c; }
-    #wallet-btn .icon-wallet { width: 15px; height: 15px; }
-    #wallet-btn.connected { border-color: #3ecf7e; color: #fff; }
+    #wallet-btn .icon-wallet, #wallet-btn .icon-user { width: 16px; height: 16px; }
+    #wallet-btn.connected { border-color: #3a3a3a; color: #fff; }
+    #wallet-btn-label { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width .2s ease, opacity .2s ease; }
+    #wallet-btn.expanded { padding: 10px 16px; border-radius: 8px; }
+    #wallet-btn.expanded #wallet-btn-label { max-width: 140px; opacity: 1; }
+
+    /* --- Account panel (wallet address, Getgems link, owned NFTs) -------- */
+    #account-modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.6); }
+    #account-modal[hidden] { display: none; }
+    .account-sheet { width: min(100%, 480px); max-height: 85dvh; overflow-y: auto; background: #121212; border: 1px solid #262626; border-bottom: none; border-radius: 20px 20px 0 0; padding: 20px 20px max(20px, env(safe-area-inset-bottom)); }
+    .account-sheet-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .account-sheet-header h2 { margin: 0; font-size: 18px; font-weight: 600; color: #f3f3f3; }
+    #account-close { background: none; border: none; padding: 6px; color: #9b9b9b; }
+    #account-close .icon-close { width: 18px; height: 18px; }
+    .account-row { margin: 0 0 16px; }
+    .account-label { margin: 0 0 6px; color: #727272; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .account-address-row { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; }
+    .account-address-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #e6e6e6; }
+    #account-copy { background: none; border: none; padding: 4px; color: #9b9b9b; flex: none; }
+    #account-copy .icon-copy { width: 16px; height: 16px; }
+    #account-copy.copied { color: #3ecf7e; }
+    #account-getgems-link { display: inline-block; color: #30A1F5; text-decoration: underline; font-size: 14px; }
+    #account-nft-count { margin: 0; color: #f3f3f3; font-size: 15px; }
+    .account-disconnect { width: 100%; margin-top: 8px; padding: 14px 16px; background: none; border: 1.5px solid #e5484d; border-radius: 12px; color: #e5484d; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .account-disconnect:active { background: rgba(229,72,77,.1); }
+    .account-disconnect .icon-wallet { width: 15px; height: 15px; }
 
     #auth-status-btn {
       position: fixed;
@@ -351,6 +393,39 @@
     <span class="icon-mask icon-wallet" aria-hidden="true"></span>
     <span id="wallet-btn-label">Connect Wallet</span>
   </button>
+
+  <!-- Account panel, opened from the wallet button once connected. -->
+  <div id="account-modal" hidden>
+    <div class="account-sheet">
+      <div class="account-sheet-header">
+        <h2>My Account</h2>
+        <button id="account-close" type="button" aria-label="Close">
+          <span class="icon-mask icon-close" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="account-row">
+        <p class="account-label">Wallet Address</p>
+        <div class="account-address-row">
+          <span id="account-address"></span>
+          <button id="account-copy" type="button" aria-label="Copy address">
+            <span class="icon-mask icon-copy" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+      <div class="account-row">
+        <p class="account-label">Getgems Profile</p>
+        <a id="account-getgems-link" href="#" target="_blank" rel="noopener">View on Getgems</a>
+      </div>
+      <div class="account-row">
+        <p class="account-label">Collected NFTs</p>
+        <p id="account-nft-count">0</p>
+      </div>
+      <button id="account-disconnect" class="account-disconnect" type="button">
+        <span class="icon-mask icon-wallet" aria-hidden="true"></span>
+        Disconnect Wallet
+      </button>
+    </div>
+  </div>
   <button id="auth-status-btn" type="button" data-state="checking" title="Checking...">
     <span class="dot"></span>
     <span id="auth-status-label">Checking...</span>
