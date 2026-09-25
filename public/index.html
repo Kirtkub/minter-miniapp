@@ -158,6 +158,11 @@
       gap: 7px;
       z-index: 20;
     }
+    /* Same-element ID selector above beats the UA [hidden] rule's low
+       specificity, so the `hidden` attribute set from JS (kept hidden the
+       whole time inside the Telegram miniapp) was being ignored and the
+       badge stayed visible regardless. */
+    #auth-status-btn[hidden] { display: none; }
     #auth-status-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: #6a6a6a; flex: none; }
     #auth-status-btn[data-state="checking"] .dot { background: #6a6a6a; }
     #auth-status-btn[data-state="ok"] { border-color: #2f8f5f; }

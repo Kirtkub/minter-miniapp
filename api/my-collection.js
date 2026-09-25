@@ -5,7 +5,11 @@ import { fetchJsonCached, getItemNftData, jsonResponse, listOwnedItemAddresses }
 // How many items to inspect on-chain per request. Generous for a personal
 // collection; keeps worst-case latency/RPC load bounded.
 const MAX_ITEMS = 200;
-// How many get_nft_data() calls to run in parallel.
+// How many get_nft_data() calls can be "in flight" (awaiting their turn)
+// at once. Actual pacing against TON Center happens centrally in
+// _catalog.js (shared across every caller, this one included), so this
+// just bounds how many worker promises stay alive at a time — it no
+// longer needs to be small to avoid 429s.
 const CONCURRENCY = 6;
 
 // Only the extension of the private image is exposed (never its URL), so the

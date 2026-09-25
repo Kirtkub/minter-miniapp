@@ -3,7 +3,62 @@ import { collectionAddress, nftsMetadataIndex, tonChain } from "../src/config.js
 
 const TON_CENTER_BASE =
   tonChain === "Testnet" ? "https://testnet.toncenter.com" : "https://toncenter.com";
-const GETTER_RETRY_DELAYS = [500, 1200, 2500];
+// The free/anonymous TON Center tier allows very few requests per second;
+// "My Collection" alone can fire off a handful of get_nft_data() calls in
+// parallel (one per owned item), so without spacing them out several of
+// them get 429'd even after retrying. A free API key raises that limit by
+// a lot — see https://docs.toncenter.com — and is picked up automatically
+// here if set.
+const TON_CENTER_API_KEY = process.env.TONCENTER_API_KEY?.trim() || null;
+const GETTER_RETRY_DELAYS = [500, 1200, 2500, 4000, 6000];
+// Minimum spacing enforced between the *start* of any two outgoing TON
+// Center requests from this warm serverless instance (get_nft_data calls,
+// the v3 owned-items listing, getAddressInformation — all share the same
+// rate-limit bucket), regardless of how many of them were fired off in
+// parallel by the caller.
+const MIN_TON_CENTER_INTERVAL_MS = TON_CENTER_API_KEY ? 100 : 350;
+let tonCenterSchedulingChain = Promise.resolve();
+let tonCenterNextSlotAt = 0;
+
+function tonCenterHeaders(extra = {}) {
+  return TON_CENTER_API_KEY ? { ...extra, "x-api-key": TON_CENTER_API_KEY } : extra;
+}
+
+// Serializes + paces every outgoing TON Center request across concurrent
+// callers (e.g. the several get_nft_data() calls "My Collection" issues in
+// parallel), so bursts don't trip the free tier's rate limit in the first
+// place — on top of the per-call 429 retry below, which still covers
+// limits shared with other warm instances / other traffic.
+function scheduleTonCenterRequest() {
+  const turn = tonCenterSchedulingChain.then(async () => {
+    const now = Date.now();
+    const waitMs = Math.max(0, tonCenterNextSlotAt - now);
+    tonCenterNextSlotAt = Math.max(now, tonCenterNextSlotAt) + MIN_TON_CENTER_INTERVAL_MS;
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  });
+  // Keep the chain alive even if this particular turn's caller later
+  // throws — only the pacing itself must never break.
+  tonCenterSchedulingChain = turn.catch(() => {});
+  return turn;
+}
+
+async function fetchTonCenter(url, options = {}) {
+  for (let attempt = 0; attempt <= GETTER_RETRY_DELAYS.length; attempt += 1) {
+    await scheduleTonCenterRequest();
+    const response = await fetch(url, {
+      ...options,
+      headers: tonCenterHeaders(options.headers),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.status !== 429) return response;
+    if (attempt === GETTER_RETRY_DELAYS.length) return response;
+    await new Promise((resolve) => setTimeout(resolve, GETTER_RETRY_DELAYS[attempt]));
+  }
+  // Unreachable (the loop above always returns), but keeps the function's
+  // return type honest for tooling.
+  throw new Error("TON Center request failed");
+}
+
 let catalogCache = { expiresAt: 0, items: null };
 
 // Small in-memory cache for per-item metadata JSON fetched while building
@@ -38,25 +93,17 @@ async function fetchJsonCached(url, ttlMs = 15000) {
 }
 
 async function runGetMethodAt(address, method, stack = []) {
-  for (let attempt = 0; attempt <= GETTER_RETRY_DELAYS.length; attempt += 1) {
-    const response = await fetch(`${TON_CENTER_BASE}/api/v2/runGetMethod`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ address, method, stack }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (response.ok) {
-      const payload = await response.json();
-      if (!payload.ok || payload.result?.exit_code !== 0) {
-        throw new Error(`TON getter ${method} failed`);
-      }
-      return payload.result.stack;
-    }
-    if (response.status !== 429 || attempt === GETTER_RETRY_DELAYS.length) {
-      throw new Error(`TON Center request failed with ${response.status}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, GETTER_RETRY_DELAYS[attempt]));
+  const response = await fetchTonCenter(`${TON_CENTER_BASE}/api/v2/runGetMethod`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ address, method, stack }),
+  });
+  if (!response.ok) throw new Error(`TON Center request failed with ${response.status}`);
+  const payload = await response.json();
+  if (!payload.ok || payload.result?.exit_code !== 0) {
+    throw new Error(`TON getter ${method} failed`);
   }
+  return payload.result.stack;
 }
 
 async function runGetMethod(method, stack = []) {
@@ -150,10 +197,7 @@ export async function listOwnedItemAddresses(ownerAddress, { maxItems = 500 } = 
     const url =
       `${TON_CENTER_BASE}/api/v3/nft/items?owner_address=${encodeURIComponent(owner)}` +
       `&collection_address=${encodeURIComponent(collection)}&limit=${limit}&offset=${offset}`;
-    const response = await fetch(url, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(10000),
-    });
+    const response = await fetchTonCenter(url, { headers: { accept: "application/json" } });
     if (!response.ok) throw new Error(`TON Center v3 request failed with ${response.status}`);
     const payload = await response.json();
     const batch = Array.isArray(payload?.nft_items) ? payload.nft_items : [];
@@ -266,9 +310,9 @@ export async function loadCatalog() {
 }
 
 export async function isContractActive() {
-  const response = await fetch(
+  const response = await fetchTonCenter(
     `${TON_CENTER_BASE}/api/v2/getAddressInformation?address=${encodeURIComponent(collectionAddress)}`,
-    { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10000) },
+    { headers: { accept: "application/json" } },
   );
   if (!response.ok) throw new Error(`TON Center request failed with ${response.status}`);
   const payload = await response.json();

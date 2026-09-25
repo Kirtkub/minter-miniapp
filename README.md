@@ -242,3 +242,15 @@ lungo del previsto (specie su Testnet), ed era la causa del mancato invio
 della notifica. `refreshCollectionAfterMint` continua a girare com'era, ma
 solo per aggiornare la UI di "My Collection" (immagine rivelata, bottone
 "Sell"); non è più da cui dipende l'invio del messaggio Telegram.
+
+## Rate limit di TON Center (429)
+
+Tutte le chiamate a TON Center (`get_nft_data`, `getAddressInformation`,
+l'indexer v3 usato da "My Collection") sono centralizzate in
+`api/_catalog.js`, che le distanzia nel tempo (anche quando il chiamante ne
+fa partire diverse in parallelo, es. `my-collection.js` per più NFT
+posseduti) e riprova automaticamente sui `429`. Il tier anonimo di TON
+Center ha un limite molto basso; se vedi ancora `429` nei log di Vercel,
+imposta la variabile d'ambiente opzionale **`TONCENTER_API_KEY`** (gratuita,
+vedi https://docs.toncenter.com) per alzare drasticamente il limite —
+viene raccolta automaticamente e inviata come header `x-api-key`.

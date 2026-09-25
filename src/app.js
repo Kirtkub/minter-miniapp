@@ -605,7 +605,10 @@ async function downloadRevealedImage(item, button) {
   button.textContent = "Downloading...";
   try {
     const tg = window.Telegram?.WebApp;
-    const insideTelegram = Boolean(tg?.initData);
+    // Local re-check (not the module-level `insideTelegram`): this can run
+    // from a browser tab too, and either way only cares about whether
+    // tg.openLink is usable right now, further down.
+    const canOpenInTelegram = Boolean(tg?.initData);
     const baseName = item.name.replace(/[^a-z0-9-_]+/gi, "_") || "nft";
     const absoluteUrl = new URL(item.privateImageUrl, window.location.origin).href;
 
@@ -640,7 +643,7 @@ async function downloadRevealedImage(item, button) {
     }
 
     // 3) Telegram without a working native download: open in the browser.
-    if (insideTelegram && typeof tg.openLink === "function") {
+    if (canOpenInTelegram && typeof tg.openLink === "function") {
       tg.openLink(absoluteUrl);
       return;
     }
