@@ -52,7 +52,7 @@ const state: AppState = {
   publicKeyHex: null,
   secretKeyHex: null,
   connectedAddress: null,
-  network: "testnet",
+  network: "mainnet",
   prepared: null,
 };
 
