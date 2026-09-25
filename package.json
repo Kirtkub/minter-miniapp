@@ -6,7 +6,9 @@
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "compile:contracts": "tact --config deploy-collection/tact.config.json",
-    "dev": "node scripts/dev-server.mjs"
+    "dev": "node scripts/dev-server.mjs",
+    "verify:collection": "blueprint verify NftCollection",
+    "verify:item": "blueprint verify NftItem"
   },
   "dependencies": {
     "@ton/core": "0.63.1",
@@ -16,6 +18,7 @@
   },
   "devDependencies": {
     "@tact-lang/compiler": "1.6.13",
+    "@ton/blueprint": "^0.31.0",
     "esbuild": "^0.28.2"
   }
 }

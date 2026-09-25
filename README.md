@@ -74,6 +74,70 @@ i file compilati sono già inclusi nel bundle a tempo di build (tramite i
 loader `text`/`binary` di esbuild), quindi non serve alcuna richiesta di
 rete per costruirlo.
 
+## Verifica del codice sorgente (verifier.ton.org)
+
+`verifier.ton.org` non offre una semplice API REST da chiamare per "caricare
+e pubblicare" il sorgente da browser: il flusso reale è
+
+1. il sorgente Tact viene ricompilato dal backend del verifier, che calcola
+   l'hash del code cell risultante e lo confronta con quello del contratto
+   già deployato all'indirizzo indicato;
+2. se combacia, il backend firma una proof;
+3. quella proof va pubblicata **on-chain** con una transazione firmata da un
+   wallet (invio al TON Sources Registry) — è questo passaggio che richiede
+   necessariamente un wallet collegato, quindi non può avvenire da una pagina
+   statica senza interazione dell'utente.
+
+Per questo la verifica non è automatica nella miniapp `/deploycollection`:
+dopo un deploy riuscito, lo Step 5 della pagina mostra i comandi pronti
+(indirizzo/network già impostati) da lanciare dal repository con la
+[Blueprint CLI](https://github.com/ton-org/blueprint), già presente come
+devDependency:
+
+```bash
+npm install   # una tantum, installa anche @ton/blueprint
+```
+
+**Collezione e NFT sono due contratti diversi** (codice compilato diverso →
+hash diverso), quindi vanno verificati separatamente:
+
+```bash
+# 1) Il contratto della collezione — subito dopo il deploy
+npx blueprint verify NftCollection --network testnet --compiler-version 1.6.13
+
+# 2) Il contratto NftItem — UNA SOLA VOLTA, dopo aver mintato almeno un NFT.
+#    Va dato l'indirizzo di un qualsiasi item già mintato (non quello della
+#    collezione): tutti gli item mintati da questa collezione, ora e in
+#    futuro, condividono esattamente lo stesso codice compilato, quindi
+#    quest'unica verifica si applica automaticamente a tutti — non va
+#    ripetuta ad ogni mint.
+npx blueprint verify NftItem --network testnet --compiler-version 1.6.13
+```
+
+(usa `--network mainnet` per le collezioni su Mainnet). Ogni comando
+ricompila il rispettivo sorgente (`wrappers/NftCollection.compile.ts` →
+`deploy-collection/contracts/nft_collection.tact`, e
+`wrappers/NftItem.compile.ts` → `deploy-collection/contracts/nft_item.tact`),
+poi chiede di confermare con un wallet la transazione che pubblica la proof
+on-chain.
+
+**La pagina di mint (`/`) non è un contratto**, quindi non c'è nulla da
+verificare per lei: `verifier.ton.org` verifica bytecode on-chain, non
+frontend.
+
+La versione del compilatore passata con `--compiler-version` **deve**
+combaciare con quella usata per generare i `.boc` committati in
+`deploy-collection/contracts/output/` (vedi devDependency
+`@tact-lang/compiler` in `package.json`), altrimenti l'hash non corrisponde
+e la verifica viene rifiutata.
+
+**`tonviewer.com` non richiede un passaggio separato**: gli explorer come
+Tonviewer leggono il TON Sources Registry direttamente per code hash, quindi
+una volta che una proof è on-chain, ogni contratto con quello stesso codice
+(inclusi tutti gli NFT già mintati e quelli futuri, dopo la verifica di
+`NftItem`) risulta "verificato" automaticamente, senza alcuna chiamata
+aggiuntiva da parte di questa app.
+
 ## Badge di autorizzazione nella pagina principale
 
 Al caricamento di `/`, la mint app chiama `GET /api/auth-status`, che
