@@ -959,24 +959,7 @@ async function checkAuthStatus() {
 // join the channel; 2 seconds after pressing the button the membership is
 // checked again. Outside Telegram (plain browser) nothing of this applies.
 
-const AGE_CONFIRMED_KEY = "ageConfirmed";
-const GATE_RECHECK_DELAY_MS = 2000;
-
-function isAgeConfirmed() {
-  try {
-    return localStorage.getItem(AGE_CONFIRMED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function rememberAgeConfirmed() {
-  try {
-    localStorage.setItem(AGE_CONFIRMED_KEY, "1");
-  } catch {
-    // Storage unavailable: the question will simply be asked again next time.
-  }
-}
+const GATE_RECHECK_DELAY_MS = 10000;
 
 function setGate({ text, primary, secondary, note, primaryDisabled = false, onPrimary, onSecondary }) {
   gateNode.hidden = false;
@@ -1063,7 +1046,6 @@ function showAgeStep(tg) {
     primary: "Yes, I'm at least 18",
     secondary: "No",
     onPrimary: () => {
-      rememberAgeConfirmed();
       showJoinStep(tg);
     },
     onSecondary: () => {
@@ -1083,7 +1065,6 @@ async function runAccessGate(tg) {
     return;
   }
   if (member) unlockApp();
-  else if (isAgeConfirmed()) showJoinStep(tg);
   else showAgeStep(tg);
 }
 
