@@ -215,14 +215,30 @@ mint, ma un popup "NFT minted successfully!" / "Error during minting,
 please try again."; il bottone "authorized/unauthorized" in alto a destra è
 nascosto.
 
-Quando `refreshCollectionAfterMint` rileva la nuova copia posseduta, il
-frontend chiama `POST /api/mint-notify` con `itemAddress` e `ownerAddress`
-(più `Authorization: tma <initData>`). Il server riverifica su chain che
-`ownerAddress` possiede davvero `itemAddress` in questa collezione (stesso
-controllo di `private-image.js`), poi scarica l'immagine privata con
-`NETLIFY_PRIVATE_SECRET` e la invia con `sendPhoto` in chat privata con
-l'utente, con didascalia "You've got a new Spicy Pic added to your
-collection!" + nome dell'NFT, e il bottone "Open Miniapp" (`appUrl`). Se
-l'NFT non ha un'immagine privata configurata, invia solo il messaggio di
-testo. Fallisce in silenzio (loggato, non mostrato all'utente): il mint è
-già andato a buon fine comunque.
+Subito dopo l'invio della transazione di mint (non appena TonConnect
+conferma l'invio, senza aspettare l'indexer), il frontend chiama
+`POST /api/mint-notify` con `itemIndex` (l'indice restituito da
+`/api/sign-mint`, cioè `nextItemIndex` al momento della firma) e
+`ownerAddress` (più `Authorization: tma <initData>`). Il server risolve
+`itemIndex` nell'indirizzo dell'item chiamando direttamente il getter
+`get_nft_address_by_index` del contratto collection (istantaneo, nessun
+indexer coinvolto), poi riverifica su chain che `ownerAddress` possieda
+davvero quell'item in questa collezione (stesso controllo di
+`private-image.js`). Se l'item non risulta ancora deployato/posseduto
+(risposta `403 not_owner` — normale nei primi secondi dopo il mint), il
+client riprova con backoff fino a un paio di minuti. Una volta confermato,
+il server scarica l'immagine privata con `NETLIFY_PRIVATE_SECRET` e la
+invia con `sendPhoto` in chat privata con l'utente, con didascalia "You've
+got a new Spicy Pic added to your collection!" + nome dell'NFT, e il
+bottone "Open Miniapp" (`appUrl`). Se l'NFT non ha un'immagine privata
+configurata, invia solo il messaggio di testo. Fallisce in silenzio
+(loggato, non mostrato all'utente): il mint è già andato a buon fine
+comunque.
+
+Nota: in precedenza questa chiamata partiva solo quando `refreshCollectionAfterMint`
+rilevava la nuova copia tramite l'indexer v3 di TON Center (polling di
+"My Collection", max ~90s) — quell'indexer può restare indietro molto più a
+lungo del previsto (specie su Testnet), ed era la causa del mancato invio
+della notifica. `refreshCollectionAfterMint` continua a girare com'era, ma
+solo per aggiornare la UI di "My Collection" (immagine rivelata, bottone
+"Sell"); non è più da cui dipende l'invio del messaggio Telegram.

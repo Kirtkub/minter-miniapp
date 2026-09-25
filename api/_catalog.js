@@ -171,6 +171,19 @@ export async function getNextItemIndex() {
   return stackNumber(await runGetMethod("get_collection_data"));
 }
 
+// Computes an item's address deterministically from its index, straight from
+// the collection contract's own get_nft_address_by_index() getter. Unlike
+// listOwnedItemAddresses() (backed by TON Center's v3 indexer, which can lag
+// well behind the real chain state), this needs no indexing at all — the
+// collection contract can answer it as soon as the mint index is known, even
+// before the item contract itself has been deployed.
+export async function getNftAddressByIndex(index) {
+  const stack = await runGetMethod("get_nft_address_by_index", [
+    ["num", `0x${BigInt(index).toString(16)}`],
+  ]);
+  return stackAddress(stack, 0);
+}
+
 export async function getAuthPublicKey() {
   return stackNumber(await runGetMethod("get_auth_public_key"));
 }
@@ -262,4 +275,11 @@ export async function isContractActive() {
   return payload?.result?.state === "active";
 }
 
-export { fetchJson, fetchJsonCached, jsonResponse, runGetMethod, runGetMethodAt, stackNumber };
+export {
+  fetchJson,
+  fetchJsonCached,
+  jsonResponse,
+  runGetMethod,
+  runGetMethodAt,
+  stackNumber,
+};

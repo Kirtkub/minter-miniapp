@@ -166,6 +166,12 @@ export default async function handler(req, res) {
       mintingPrice: item.mintingPrice,
       validUntil,
       signature,
+      // The index the newly minted item will get (nextItemIndex at
+      // authorization time). Lets the client resolve the item's address
+      // itself right after the mint, via the collection's
+      // get_nft_address_by_index() getter, instead of waiting for an
+      // indexer to pick it up (see api/mint-notify.js).
+      itemIndex: nextItemIndex.toString(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Mint authorization failed";

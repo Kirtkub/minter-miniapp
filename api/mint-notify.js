@@ -1,16 +1,24 @@
 import { Address } from "@ton/core";
 import { appUrl, collectionAddress } from "../src/config.js";
-import { fetchJsonCached, getItemNftData, jsonResponse } from "./_catalog.js";
+import { fetchJsonCached, getItemNftData, getNftAddressByIndex, jsonResponse } from "./_catalog.js";
 import { getBotToken, userFromRequest } from "./_telegram.js";
 
 // Sends the "new Spicy Pic" message in the user's private chat with the bot
 // right after a successful mint, with the NFT's name, its private (revealed)
-// image, and an "Open Miniapp" button. Called by the client once it detects
-// the newly minted copy in "My Collection".
+// image, and an "Open Miniapp" button. Called by the client right after the
+// mint transaction is sent, passing the `itemIndex` handed out by
+// /api/sign-mint (preferred — resolved to an address here via the
+// collection's get_nft_address_by_index() getter, with no indexer involved)
+// or, for older clients, a pre-resolved `itemAddress` directly.
 //
-// Ownership of `itemAddress` by `ownerAddress` is checked on-chain here (the
-// same check used by private-image.js) before anything is sent, so this
-// can't be used to message an arbitrary Telegram user with an NFT they
+// The item's deploy message can still be a few seconds behind the mint
+// transaction, so a 403 "not_owner" here just means "not deployed/owned
+// yet" — the client is expected to retry with backoff, not treat it as a
+// permanent failure.
+//
+// Ownership of the resolved item by `ownerAddress` is checked on-chain here
+// (the same check used by private-image.js) before anything is sent, so
+// this can't be used to message an arbitrary Telegram user with an NFT they
 // don't hold.
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -32,10 +40,13 @@ export default async function handler(req, res) {
   let ownerAddress;
   try {
     const body = req.body && typeof req.body === "object" ? req.body : JSON.parse(await readBody(req));
-    itemAddress = Address.parse(String(body.itemAddress));
     ownerAddress = Address.parse(String(body.ownerAddress));
+    const hasItemIndex = body.itemIndex !== undefined && body.itemIndex !== null && body.itemIndex !== "";
+    itemAddress = hasItemIndex
+      ? await getNftAddressByIndex(BigInt(body.itemIndex))
+      : Address.parse(String(body.itemAddress));
   } catch {
-    return jsonResponse(res, 400, { error: "Invalid item or owner address" });
+    return jsonResponse(res, 400, { error: "Invalid item index/address or owner address" });
   }
 
   try {

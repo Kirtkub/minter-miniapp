@@ -539,7 +539,9 @@ async function loadMyCollection() {
 
 // After a mint the new NFT appears on-chain (and in the indexer) after a
 // little while: re-check "My Collection" every few seconds until the number
-// of owned copies grows, or give up after ~90 seconds.
+// of owned copies grows, or give up after ~90 seconds. Purely a UI refresh
+// (reveals the private image / "Sell" button for the new copy) — the
+// Telegram notification no longer waits on this, see notifyMintTelegram().
 function refreshCollectionAfterMint(item) {
   const beforeAddresses = new Set(ownedCopies(item).map((copy) => copy.itemAddress));
   let attempts = 0;
@@ -548,10 +550,7 @@ function refreshCollectionAfterMint(item) {
     state.myCollectionLoadedFor = null;
     await loadMyCollection();
     const newCopy = ownedCopies(item).find((copy) => !beforeAddresses.has(copy.itemAddress));
-    if (newCopy) {
-      notifyMintTelegram(newCopy.itemAddress);
-      return;
-    }
+    if (newCopy) return;
     if (attempts >= 9) return;
     setTimeout(tick, 10000);
   };
@@ -918,16 +917,44 @@ function showMintResult(success) {
 }
 
 // Tells the server to send the "new Spicy Pic" Telegram message for the
-// newly minted item. Best effort: failures are logged only, never shown to
-// the user — the mint itself already succeeded.
-function notifyMintTelegram(itemAddress) {
+// newly minted item, identified by `itemIndex` (from /api/sign-mint) rather
+// than waiting to see it through the collection indexer — the collection
+// contract can resolve that index to an address instantly, but the item
+// itself can take a few seconds to be deployed and owned on-chain, so a
+// "not ready yet" response is retried with backoff instead of given up on
+// immediately. Best effort throughout: failures are logged only, never
+// shown to the user — the mint itself already succeeded.
+const MINT_NOTIFY_MAX_ATTEMPTS = 20;
+const MINT_NOTIFY_RETRY_DELAY_MS = 6000;
+
+function notifyMintTelegram(itemIndex, attempt = 1) {
   if (!insideTelegram || !state.walletAddress) return;
   const tg = window.Telegram?.WebApp;
+
+  const retry = () => {
+    if (attempt >= MINT_NOTIFY_MAX_ATTEMPTS) return;
+    setTimeout(() => notifyMintTelegram(itemIndex, attempt + 1), MINT_NOTIFY_RETRY_DELAY_MS);
+  };
+
   fetch("/api/mint-notify", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `tma ${tg.initData}` },
-    body: JSON.stringify({ itemAddress, ownerAddress: state.walletAddress }),
-  }).catch((error) => console.error("mint_notify_request_error", error));
+    body: JSON.stringify({ itemIndex, ownerAddress: state.walletAddress }),
+  })
+    .then(async (response) => {
+      if (response.ok) return; // sent
+      const payload = await response.json().catch(() => null);
+      if (payload?.error === "not_owner") {
+        // Item not deployed/owned yet on-chain: normal right after a mint.
+        retry();
+        return;
+      }
+      console.error("mint_notify_failed", payload);
+    })
+    .catch((error) => {
+      console.error("mint_notify_request_error", error);
+      retry();
+    });
 }
 
 function showMintReport(text) {
@@ -1005,6 +1032,7 @@ async function mint(item, button) {
 
     outcome = "success";
     setStatus("Transaction sent.");
+    if (authorization?.itemIndex != null) notifyMintTelegram(authorization.itemIndex);
     refreshCollectionAfterMint(item);
     await loadCatalog();
   } catch (error) {
@@ -1203,8 +1231,10 @@ function initTelegram() {
   insideTelegram = Boolean(tg.initData);
   if (insideTelegram) {
     // Developer-only affordance, not meant for end users inside Telegram.
-    authStatusButton.hidden = true;
+    // Stays hidden (it's hidden by default in the markup already).
     runAccessGate(tg);
+  } else {
+    authStatusButton.hidden = false;
   }
 }
 
