@@ -16,13 +16,13 @@
 //      per QUESTO nuovo deploy (deployment-info.json la contiene): è diversa
 //      per ogni collezione deployata, quella vecchia della collezione di test
 //      non corrisponde alla chiave pubblica salvata nel nuovo contratto.
-export const collectionAddress = "REPLACE_WITH_MAINNET_COLLECTION_ADDRESS";
+export const collectionAddress = "EQDPOHE5QBCryvTuUWxLSZeOLb5b-JovL89D32adESo1cPTP";
 // Must match the `owner` set at deploy time (see deployment-info.json from
 // /deploycollection). Only this wallet's Withdraw messages are accepted by
 // the contract, and only this wallet sees the "Withdraw" button in the UI.
-export const ownerAddress = "REPLACE_WITH_MAINNET_OWNER_ADDRESS";
-export const collectionMetadata = "REPLACE_WITH_MAINNET_COLLECTION_METADATA_URL";
-export const nftsMetadataIndex = "REPLACE_WITH_MAINNET_METADATA_INDEX_URL";
+export const ownerAddress = "EQDV3m92drB90oehPaOp4X4zqHsTclYat4fnwFXn_GMVagxW";
+export const collectionMetadata = "https://astounding-flan-ffc457.netlify.app/collectionMetadata.json";
+export const nftsMetadataIndex = "https://astounding-flan-ffc457.netlify.app/metadataIndex.json";
 export const tonChain = "Mainnet";
 // Telegram access gate (only applied when the app is opened as a Telegram
 // miniapp): users must be adults and members of this channel.
