@@ -4,5 +4,10 @@
   "rewrites": [
     { "source": "/deploycollection", "destination": "/deploycollection/index.html" },
     { "source": "/deploycollection/", "destination": "/deploycollection/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/verify-source.js": {
+      "includeFiles": "deploy-collection/contracts/**"
+    }
+  }
 }

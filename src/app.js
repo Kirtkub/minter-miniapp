@@ -1,5 +1,15 @@
 import { Address, beginCell, toNano } from "@ton/core";
 import { channelInviteLink, collectionAddress, nftsMetadataIndex, ownerAddress, tonChain } from "./config.js";
+import {
+  codeCellHashBase64,
+  isSourceVerified,
+  pollUntilVerified,
+  requestVerificationSubmission,
+} from "../shared/verifier-client.js";
+// Same compiled NftItem artifact deployed on-chain (see deploy-collection/),
+// embedded so this app can compute its code cell hash and drive the "Verify
+// NftItem Contract" flow — see scripts/build-web.mjs's esbuild loaders.
+import itemCodeBoc from "../deploy-collection/contracts/output/NftCollection_NftItem.code.boc";
 
 const state = {
   connected: false,
@@ -50,6 +60,10 @@ const mintResultModal = document.querySelector("#mint-result-modal");
 const mintResultBox = document.querySelector("#mint-result-box");
 const mintResultText = document.querySelector("#mint-result-text");
 const mintResultClose = document.querySelector("#mint-result-close");
+const verifyItemModal = document.querySelector("#verify-item-modal");
+const verifyItemStatus = document.querySelector("#verify-item-status");
+const verifyItemButton = document.querySelector("#verify-item-button");
+const verifyItemClose = document.querySelector("#verify-item-close");
 const navButtons = document.querySelectorAll(".nav-btn");
 const bottomNav = document.querySelector("#bottom-nav");
 const pages = {
@@ -1038,6 +1052,11 @@ async function mint(item, button) {
     if (authorization?.itemIndex != null) notifyMintTelegram(authorization.itemIndex);
     refreshCollectionAfterMint(item);
     await loadCatalog();
+    // Only the very first NFT ever minted from this Collection (on-chain
+    // index 0, as authorized by /api/sign-mint from the collection's real
+    // next_item_index) triggers the one-time NftItem source verification —
+    // never for #2, #3, etc.
+    if (authorization?.itemIndex === "0") openVerifyItemModal();
   } catch (error) {
     caughtError = error;
     const message = error instanceof Error ? error.message : String(error);
@@ -1063,6 +1082,70 @@ async function mint(item, button) {
       showMintReport(report);
     }
     button.disabled = false;
+  }
+}
+
+// --- Verify & publish the NftItem contract's source code (first NFT only) --
+// Same real, on-chain flow as the Collection's (see deploy-collection/web/
+// src/app.ts): /api/verify-source resolves item #0's address itself (via
+// get_nft_address_by_index(0), never trusting the client), asks the public
+// TON Sources Registry verifier backend to independently recompile the
+// exact FunC that was deployed, and only relays the resulting signed proof
+// through the connected wallet if that recompilation actually matches.
+
+function itemCodeHash() {
+  return codeCellHashBase64(itemCodeBoc);
+}
+
+function setVerifyItemState(step, message = "") {
+  verifyItemStatus.textContent = message;
+  verifyItemButton.disabled = step === "working" || step === "verified";
+  verifyItemButton.textContent = step === "verified" ? "✓ NftItem Source Code Verified" : "Verify & Publish Source Code";
+  verifyItemModal.classList.toggle("verified", step === "verified");
+}
+
+async function openVerifyItemModal() {
+  if (!verifyItemModal) return;
+  verifyItemModal.hidden = false;
+  setVerifyItemState("idle");
+  const alreadyDone = await isSourceVerified(itemCodeHash(), tonChain === "Testnet");
+  if (alreadyDone) setVerifyItemState("verified", "This exact NftItem code is already verified in the TON Sources Registry.");
+}
+
+async function verifyItem() {
+  setVerifyItemState("working", "Compiling and checking the source code against the deployed contract...");
+  try {
+    const submission = await requestVerificationSubmission("item");
+    if (submission.alreadyVerified) {
+      setVerifyItemState("verified", "This exact NftItem code is already verified in the TON Sources Registry.");
+      return;
+    }
+
+    setVerifyItemState("working", "Waiting for the signature in your wallet...");
+    await tonConnectUI.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 300,
+      messages: [
+        {
+          address: submission.toAddress,
+          amount: submission.amountNanoTon,
+          payload: submission.payloadBase64,
+        },
+      ],
+    });
+
+    setVerifyItemState("working", "Transaction sent. Waiting for the Sources Registry to confirm...");
+    const confirmed = await pollUntilVerified(itemCodeHash(), tonChain === "Testnet");
+    if (confirmed) {
+      setVerifyItemState("verified", "The NftItem source code is now public on verifier.ton.org and tonviewer.com.");
+    } else {
+      setVerifyItemState(
+        "error",
+        "Transaction sent, but the registry hasn't confirmed it yet. Check back shortly on verifier.ton.org.",
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setVerifyItemState("error", "Verification failed: " + message);
   }
 }
 
@@ -1286,6 +1369,10 @@ window.addEventListener("DOMContentLoaded", () => {
   if (!insideTelegram) checkAuthStatus();
   mintResultClose.addEventListener("click", () => {
     mintResultModal.hidden = true;
+  });
+  verifyItemButton?.addEventListener("click", () => verifyItem());
+  verifyItemClose?.addEventListener("click", () => {
+    verifyItemModal.hidden = true;
   });
   debugCopyButton?.addEventListener("click", () => copyMintReport());
   debugCloseButton?.addEventListener("click", () => {

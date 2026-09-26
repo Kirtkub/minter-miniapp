@@ -74,70 +74,6 @@ i file compilati sono già inclusi nel bundle a tempo di build (tramite i
 loader `text`/`binary` di esbuild), quindi non serve alcuna richiesta di
 rete per costruirlo.
 
-## Verifica del codice sorgente (verifier.ton.org)
-
-`verifier.ton.org` non offre una semplice API REST da chiamare per "caricare
-e pubblicare" il sorgente da browser: il flusso reale è
-
-1. il sorgente Tact viene ricompilato dal backend del verifier, che calcola
-   l'hash del code cell risultante e lo confronta con quello del contratto
-   già deployato all'indirizzo indicato;
-2. se combacia, il backend firma una proof;
-3. quella proof va pubblicata **on-chain** con una transazione firmata da un
-   wallet (invio al TON Sources Registry) — è questo passaggio che richiede
-   necessariamente un wallet collegato, quindi non può avvenire da una pagina
-   statica senza interazione dell'utente.
-
-Per questo la verifica non è automatica nella miniapp `/deploycollection`:
-dopo un deploy riuscito, lo Step 5 della pagina mostra i comandi pronti
-(indirizzo/network già impostati) da lanciare dal repository con la
-[Blueprint CLI](https://github.com/ton-org/blueprint), già presente come
-devDependency:
-
-```bash
-npm install   # una tantum, installa anche @ton/blueprint
-```
-
-**Collezione e NFT sono due contratti diversi** (codice compilato diverso →
-hash diverso), quindi vanno verificati separatamente:
-
-```bash
-# 1) Il contratto della collezione — subito dopo il deploy
-npx blueprint verify NftCollection --network testnet --compiler-version 1.6.13
-
-# 2) Il contratto NftItem — UNA SOLA VOLTA, dopo aver mintato almeno un NFT.
-#    Va dato l'indirizzo di un qualsiasi item già mintato (non quello della
-#    collezione): tutti gli item mintati da questa collezione, ora e in
-#    futuro, condividono esattamente lo stesso codice compilato, quindi
-#    quest'unica verifica si applica automaticamente a tutti — non va
-#    ripetuta ad ogni mint.
-npx blueprint verify NftItem --network testnet --compiler-version 1.6.13
-```
-
-(usa `--network mainnet` per le collezioni su Mainnet). Ogni comando
-ricompila il rispettivo sorgente (`wrappers/NftCollection.compile.ts` →
-`deploy-collection/contracts/nft_collection.tact`, e
-`wrappers/NftItem.compile.ts` → `deploy-collection/contracts/nft_item.tact`),
-poi chiede di confermare con un wallet la transazione che pubblica la proof
-on-chain.
-
-**La pagina di mint (`/`) non è un contratto**, quindi non c'è nulla da
-verificare per lei: `verifier.ton.org` verifica bytecode on-chain, non
-frontend.
-
-La versione del compilatore passata con `--compiler-version` **deve**
-combaciare con quella usata per generare i `.boc` committati in
-`deploy-collection/contracts/output/` (vedi devDependency
-`@tact-lang/compiler` in `package.json`), altrimenti l'hash non corrisponde
-e la verifica viene rifiutata.
-
-**`tonviewer.com` non richiede un passaggio separato**: gli explorer come
-Tonviewer leggono il TON Sources Registry direttamente per code hash, quindi
-una volta che una proof è on-chain, ogni contratto con quello stesso codice
-(inclusi tutti gli NFT già mintati e quelli futuri, dopo la verifica di
-`NftItem`) risulta "verificato" automaticamente, senza alcuna chiamata
-aggiuntiva da parte di questa app.
-
 ## Badge di autorizzazione nella pagina principale
 
 Al caricamento di `/`, la mint app chiama `GET /api/auth-status`, che
@@ -318,3 +254,57 @@ Center ha un limite molto basso; se vedi ancora `429` nei log di Vercel,
 imposta la variabile d'ambiente opzionale **`TONCENTER_API_KEY`** (gratuita,
 vedi https://docs.toncenter.com) per alzare drasticamente il limite —
 viene raccolta automaticamente e inviata come header `x-api-key`.
+
+## Verifica automatica del codice sorgente (TON Sources Registry)
+
+Dopo un **deploy riuscito della Collection** (`/deploycollection`) e dopo il
+**mint del primo NFT** (item index `0`, e solo quello) della miniapp `/`,
+l'app apre automaticamente un modal "Verify Collection" / "Verify NFT Item
+Contract" che pubblica il codice sorgente nella TON Sources Registry
+on-chain, così il contratto risulta verificato su **verifier.ton.org** e
+visibile come tale su **tonviewer.com**.
+
+Come funziona (reale, non simulato):
+
+1. Il client (`shared/verifier-client.js`) calcola l'hash reale del code
+   cell del contratto compilato e chiede a `@ton-community/contract-verifier-sdk`
+   — la stessa libreria usata da verifier.ton.org — se quell'hash risulta
+   **già** verificato nel registro. Questo stato viene sempre letto dal
+   registro on-chain/IPFS, mai da un flag locale: per questo il modal della
+   Collection, se ripubblichi lo stesso identico codice su un nuovo
+   indirizzo, mostra subito "già verificato" invece di rifare tutto da capo.
+2. Se non è ancora verificato, il client chiama `POST /api/verify-source`
+   (`{ role: "collection" | "item" }`). Il server:
+   - per `"collection"` usa l'indirizzo statico configurato in `src/config.js`;
+   - per `"item"` risolve **da solo, on-chain**, l'indirizzo dell'item #0
+     tramite il getter `get_nft_address_by_index(0)` della Collection — non
+     si fida mai di un indirizzo passato dal client, così il flusso non è
+     mai basato su un semplice contatore locale ma sullo stato reale della
+     Collection;
+   - invia al backend pubblico del verifier (`verifier-backend.ton.org` /
+     `verifier-testnet.ton.org`) l'esatto file FunC generato da Tact e
+     realmente deployato (`deploy-collection/contracts/output/*.fc`, con la
+     versione del compilatore FunC che vi è stampata come `#pragma version`),
+     chiedendogli di **ricompilarlo in autonomia** e confrontare l'hash
+     risultante con quello del contratto deployato;
+   - solo se la ricompilazione indipendente combacia, il backend restituisce
+     un messaggio firmato dal verificatore, che il server rigira al client
+     senza modificarlo (il server **non** possiede né genera mai la firma:
+     quella resta sempre del verificatore).
+3. Il client fa firmare quel messaggio al wallet TonConnect connesso
+   (paga solo il gas) e lo invia on-chain.
+4. Il client fa polling reale sul registro (di nuovo via
+   `@ton-community/contract-verifier-sdk`) finché non vede l'hash comparire,
+   poi mostra "✓ Source Code Verified" — mai prima che il registro lo
+   confermi davvero.
+
+**Nota per chi effettua il deploy**: la forma esatta della risposta JSON del
+backend pubblico del verifier non è documentata in dettaglio da ton-community;
+`api/verify-source.js` la implementa secondo il protocollo pubblico noto
+(TEP-91 + `contract-verifier-backend`). Se il servizio dovesse rifiutare la
+richiesta con un formato diverso da quello atteso, l'app mostra un errore
+esplicito (mai un falso "Verified") e rimanda alla verifica manuale su
+https://verifier.ton.org usando i file in `deploy-collection/contracts/`.
+Le variabili d'ambiente opzionali `VERIFIER_BACKEND_URL_MAINNET` /
+`VERIFIER_BACKEND_URL_TESTNET` / `VERIFIER_ID` permettono di puntare a un
+altro endpoint senza toccare il codice.

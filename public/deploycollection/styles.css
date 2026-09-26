@@ -213,40 +213,42 @@ a.explorer-link {
   color: var(--accent);
 }
 
-#verify-section a {
-  color: var(--accent);
-}
-
-.verify-steps {
-  color: var(--text);
-  font-size: 0.88rem;
-  padding-left: 20px;
-  margin: 0 0 16px;
-}
-
-.verify-steps li {
-  margin-bottom: 8px;
-}
-
-.verify-steps code,
-#verify-section p code {
-  background: #0e141d;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: var(--mono);
-  font-size: 0.85em;
-}
-
-.verify-subheading {
-  font-size: 0.9rem;
-  margin: 18px 0 8px;
-  color: var(--text);
-}
-
 footer {
   color: var(--muted);
   font-size: 0.78rem;
   text-align: center;
   margin-top: 40px;
+}
+
+/* --- Verify Collection / Verify NftItem modal ------------------------- */
+.verify-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 20px;
+}
+.verify-modal.hidden {
+  display: none !important;
+}
+.verify-modal-box {
+  width: min(100%, 460px);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 24px;
+}
+.verify-modal-box h3 {
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+.verify-modal.verified .verify-modal-box h3::before {
+  content: "✓ ";
+}
+#verify-collection-status,
+#verify-item-status {
+  min-height: 1.3em;
 }

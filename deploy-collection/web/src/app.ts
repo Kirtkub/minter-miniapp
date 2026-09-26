@@ -13,6 +13,12 @@ import {
 import { getSecureRandomBytes, keyPairFromSeed } from "@ton/crypto";
 import { NftCollection } from "../../contracts/output/NftCollection_NftCollection";
 import JSZip from "jszip";
+import {
+  codeCellHashBase64,
+  isSourceVerified,
+  pollUntilVerified,
+  requestVerificationSubmission,
+} from "../../../shared/verifier-client.js";
 
 // Raw source/build artifacts of the deployed contract, embedded into the
 // bundle at build time (see esbuild "loader" config in scripts/build-web.mjs)
@@ -33,19 +39,6 @@ declare global {
 }
 
 const DEPLOY_VALUE_NANOTON = 50_000_000n; // 0.05 TON, covers storage + gas
-
-// Must match the "@tact-lang/compiler" devDependency in package.json: the
-// verifier backend recompiles the source and compares the resulting code
-// hash, so a mismatched compiler version makes verification fail even
-// though the source is otherwise identical.
-const TACT_COMPILER_VERSION = "1.6.13";
-// Name of wrappers/NftCollection.compile.ts, i.e. the <CONTRACT> argument
-// "npx blueprint verify" expects.
-const BLUEPRINT_CONTRACT_NAME = "NftCollection";
-// Name of wrappers/NftItem.compile.ts. Every NFT minted from this collection
-// shares this same compiled code, so this only needs to be verified once,
-// against the address of any single minted item.
-const BLUEPRINT_ITEM_CONTRACT_NAME = "NftItem";
 
 type NetworkId = "testnet" | "mainnet";
 
@@ -246,21 +239,6 @@ async function deploy() {
   await pollForActivation(friendlyAddress);
 }
 
-// --- Step 5: verify & publish the source code ------------------------------
-// Verification is not a plain fetch() from the browser: verifier.ton.org
-// recompiles the source and then requires an on-chain transaction (signed
-// by a wallet) to publish the proof to the TON Sources Registry. That part
-// runs through the Blueprint CLI (see wrappers/NftCollection.compile.ts),
-// so here we just prepare the exact command to run, pre-filled with the
-// network this collection was deployed to.
-function showVerifyCommand() {
-  const command = `npx blueprint verify ${BLUEPRINT_CONTRACT_NAME} --network ${state.network} --compiler-version ${TACT_COMPILER_VERSION}`;
-  setText("verify-command-value", command);
-  const itemCommand = `npx blueprint verify ${BLUEPRINT_ITEM_CONTRACT_NAME} --network ${state.network} --compiler-version ${TACT_COMPILER_VERSION}`;
-  setText("verify-item-command-value", itemCommand);
-  show("verify-section");
-}
-
 async function pollForActivation(friendlyAddress: string) {
   const base =
     state.network === "testnet"
@@ -281,8 +259,8 @@ async function pollForActivation(friendlyAddress: string) {
         setText("final-address", friendlyAddress);
         (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
         show("deploy-success");
-        showVerifyCommand();
         downloadDeployedCode().catch((err) => console.error("code_download_failed", err));
+        openVerifyCollectionModal();
         return;
       }
       setText(
@@ -300,7 +278,6 @@ async function pollForActivation(friendlyAddress: string) {
   setText("final-address", friendlyAddress);
   (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
   show("deploy-success");
-  showVerifyCommand();
   downloadDeployedCode().catch((err) => console.error("code_download_failed", err));
 }
 
@@ -327,8 +304,6 @@ async function downloadDeployedCode() {
   output.file("NftCollection_NftCollection.code.boc", collectionCodeBoc as Uint8Array);
   output.file("NftCollection_NftItem.code.boc", itemCodeBoc as Uint8Array);
 
-  const verifyCommand = `npx blueprint verify ${BLUEPRINT_CONTRACT_NAME} --network ${state.network} --compiler-version ${TACT_COMPILER_VERSION}`;
-  const verifyItemCommand = `npx blueprint verify ${BLUEPRINT_ITEM_CONTRACT_NAME} --network ${state.network} --compiler-version ${TACT_COMPILER_VERSION}`;
   const deploymentInfo = {
     deployedAt: new Date().toISOString(),
     network: state.network,
@@ -338,8 +313,6 @@ async function downloadDeployedCode() {
     authPrivateKeyHex: state.secretKeyHex,
     collectionMetadataUrl: el<HTMLInputElement>("collection-metadata-url").value.trim(),
     metadataIndexUrl: el<HTMLInputElement>("metadata-index-url").value.trim(),
-    verifyCollectionCommand: verifyCommand,
-    verifyItemCommand,
   };
   zip.file("deployment-info.json", JSON.stringify(deploymentInfo, null, 2));
   zip.file(
@@ -349,26 +322,7 @@ async function downloadDeployedCode() {
       "with the parameters used for the deploy (deployment-info.json).\n\n" +
       "WARNING: deployment-info.json also contains the Ed25519 private key\n" +
       "(authPrivateKeyHex) used by the backend to authorize minting.\n" +
-      "Keep it somewhere safe and never share it with anyone.\n\n" +
-      "VERIFYING THE SOURCE ON verifier.ton.org\n" +
-      "-----------------------------------------\n" +
-      "The collection and every minted NFT are two DIFFERENT contracts with\n" +
-      "different compiled code, so each needs to be verified once. From the\n" +
-      "project repository (not from this archive), run:\n\n" +
-      "1) Collection (this address, right away):\n\n" +
-      `     ${verifyCommand}\n\n` +
-      "2) NFT item (once, after minting at least one NFT - use the address of\n" +
-      "   any single minted item, not the collection address). Every item this\n" +
-      "   collection mints, now or later, shares the exact same code, so this\n" +
-      "   one verification covers all of them automatically - it does not need\n" +
-      "   to be repeated per NFT:\n\n" +
-      `     ${verifyItemCommand}\n\n` +
-      "Each command recompiles the matching Tact source, sends it to the\n" +
-      "verifier backend, and - once you confirm with a wallet - publishes the\n" +
-      "signed proof on-chain to the TON Sources Registry. Explorers such as\n" +
-      "tonviewer.com read that registry directly, so contracts show up as\n" +
-      "verified there automatically; there is no separate step to 'publish'\n" +
-      "to Tonviewer.\n",
+      "Keep it somewhere safe and never share it with anyone.\n",
   );
 
   const blob = await zip.generateAsync({ type: "blob" });
@@ -380,6 +334,76 @@ async function downloadDeployedCode() {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// --- Step 7: verify & publish the Collection's source code ------------------
+// Triggered automatically right after a successful deploy. Publishes the
+// contract's source into the public TON Sources Registry (verifier.ton.org /
+// tonviewer.com) via a real on-chain transaction: our /api/verify-source
+// endpoint asks the registry's own verifier backend to independently
+// recompile the exact FunC this project deployed and, only if it matches,
+// hands back a signed proof; this code just relays that proof through the
+// connected wallet. Nothing here is faked or marked "Verified" locally
+// without that independent, on-chain-checkable confirmation.
+
+function collectionCodeHash(): string {
+  return codeCellHashBase64(collectionCodeBoc as Uint8Array);
+}
+
+async function openVerifyCollectionModal() {
+  show("verify-collection-modal");
+  setText("verify-collection-address", state.prepared ? el("final-address").textContent ?? "" : "");
+  setVerifyCollectionState("idle");
+
+  const alreadyDone = await isSourceVerified(collectionCodeHash(), state.network === "testnet");
+  if (alreadyDone) setVerifyCollectionState("verified");
+}
+
+function setVerifyCollectionState(step: "idle" | "working" | "verified" | "error", message = "") {
+  const box = el("verify-collection-status");
+  const button = el<HTMLButtonElement>("verify-collection-button");
+  box.textContent = message;
+  button.disabled = step === "working" || step === "verified";
+  button.textContent = step === "verified" ? "✓ Source Code Verified" : "Verify & Publish Source Code";
+  el("verify-collection-modal").classList.toggle("verified", step === "verified");
+}
+
+async function verifyCollection() {
+  if (!tonConnectUI) return;
+  setVerifyCollectionState("working", "Compiling and checking the source code against the deployed contract...");
+
+  try {
+    const submission = await requestVerificationSubmission("collection");
+    if (submission.alreadyVerified) {
+      setVerifyCollectionState("verified", "This exact contract code is already verified in the TON Sources Registry.");
+      return;
+    }
+
+    setVerifyCollectionState("working", "Waiting for the signature in your wallet...");
+    await tonConnectUI.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 300,
+      messages: [
+        {
+          address: submission.toAddress,
+          amount: submission.amountNanoTon,
+          payload: submission.payloadBase64,
+        },
+      ],
+    });
+
+    setVerifyCollectionState("working", "Transaction sent. Waiting for the Sources Registry to confirm...");
+    const confirmed = await pollUntilVerified(collectionCodeHash(), state.network === "testnet");
+    if (confirmed) {
+      setVerifyCollectionState("verified", "The Collection's source code is now public on verifier.ton.org and tonviewer.com.");
+    } else {
+      setVerifyCollectionState(
+        "error",
+        "Transaction sent, but the registry hasn't confirmed it yet. Check back shortly on verifier.ton.org.",
+      );
+    }
+  } catch (err: any) {
+    setVerifyCollectionState("error", "Verification failed: " + (err?.message ?? String(err)));
+  }
 }
 
 // --- Wire up -----------------------------------------------------------------
@@ -404,10 +428,8 @@ window.addEventListener("DOMContentLoaded", () => {
   el("download-code-button").addEventListener("click", () => {
     downloadDeployedCode().catch((err) => alert("Error creating the archive: " + err.message));
   });
-  el("copy-verify-command").addEventListener("click", () =>
-    copy(el("verify-command-value").textContent ?? "", "copy-verify-feedback"),
-  );
-  el("copy-verify-item-command").addEventListener("click", () =>
-    copy(el("verify-item-command-value").textContent ?? "", "copy-verify-item-feedback"),
-  );
+  el("verify-collection-button").addEventListener("click", () => {
+    verifyCollection();
+  });
+  el("verify-collection-close").addEventListener("click", () => hide("verify-collection-modal"));
 });

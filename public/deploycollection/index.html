@@ -107,60 +107,22 @@
       </div>
     </section>
 
-    <section id="verify-section" class="card hidden">
-      <h2><span class="step">5</span> Verify &amp; publish the source code</h2>
-      <p class="hint">
-        Source verification on <a href="https://verifier.ton.org" target="_blank" rel="noopener">verifier.ton.org</a>
-        is not a simple upload from the browser: it recompiles the Tact source, checks the resulting code hash
-        against a deployed contract, then publishes a signed proof as an on-chain transaction to the TON Sources
-        Registry. That transaction has to be signed by a wallet, so it runs from the
-        <a href="https://github.com/ton-org/blueprint" target="_blank" rel="noopener">Blueprint</a> CLI included in
-        this repo, not automatically from this page. Once it's published on-chain, block explorers such as
-        <a href="https://tonviewer.com" target="_blank" rel="noopener">tonviewer.com</a> pick it up automatically by
-        reading the Sources Registry — there is no separate "publish to Tonviewer" step.
-      </p>
-      <p class="hint">
-        The collection and every minted NFT are two <em>different</em> contracts with different compiled code, so
-        each needs its own verification the first time. Run <code>npm install</code> once from the repository root
-        (installs <code>@ton/blueprint</code>), then both commands below.
-      </p>
-
-      <h3 class="verify-subheading">5a. Collection contract (this address)</h3>
-      <div class="key-row">
-        <div class="label-line">
-          <label style="margin:0">Verification command</label>
-          <button class="secondary" id="copy-verify-command" type="button">Copy</button>
-        </div>
-        <code id="verify-command-value" class="value-box"></code>
-        <div class="feedback" id="copy-verify-feedback"></div>
-      </div>
-
-      <h3 class="verify-subheading">5b. NFT item contract (one-time only)</h3>
-      <p class="hint">
-        Every NFT minted from this collection — now and in the future — shares the exact same compiled code; only
-        its data (owner, index, content) differs. Verify it <strong>once</strong>, after minting at least one NFT,
-        using the address of <em>any single</em> minted item (not the collection address). Explorers match by code
-        hash, so that one verification automatically applies to every item this collection has minted or will mint —
-        no need to repeat it per NFT.
-      </p>
-      <div class="key-row">
-        <div class="label-line">
-          <label style="margin:0">Verification command</label>
-          <button class="secondary" id="copy-verify-item-command" type="button">Copy</button>
-        </div>
-        <code id="verify-item-command-value" class="value-box"></code>
-        <div class="feedback" id="copy-verify-item-feedback"></div>
-      </div>
-
-      <p class="hint" style="margin-top:14px">
-        The compiler version in both commands must match the one used to build the deployed code (see
-        <code>@tact-lang/compiler</code> in <code>package.json</code>) or the hash won't match and verification will
-        be rejected. After each succeeds, refresh the contract page on Tonviewer — it will show "Source code"
-        without any further action from you.
-      </p>
-    </section>
-
     <footer>No data from this page is ever saved or sent elsewhere: keys and addresses stay in your browser.</footer>
+  </div>
+
+  <!-- Verify Collection modal: opens automatically right after a successful deploy. -->
+  <div id="verify-collection-modal" class="hidden verify-modal">
+    <div class="verify-modal-box">
+      <h3>Verify Collection</h3>
+      <p class="hint">The Collection was deployed successfully. Its source code can now be published to the TON Sources Registry, so it shows up as verified on <strong>verifier.ton.org</strong> and <strong>tonviewer.com</strong>.</p>
+      <label style="margin-top:0">Collection address</label>
+      <code id="verify-collection-address" class="value-box"></code>
+      <p id="verify-collection-status" class="hint" style="margin-top:14px"></p>
+      <div class="actions">
+        <button id="verify-collection-button" type="button">Verify &amp; Publish Source Code</button>
+        <button id="verify-collection-close" class="secondary" type="button">Close</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/deploycollection/app.js"></script>
