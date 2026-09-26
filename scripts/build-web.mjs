@@ -14,15 +14,6 @@ await build({
   minify: false,
   sourcemap: false,
   inject: ["src/shims/buffer.js"],
-  define: { global: "globalThis" },
-  loader: {
-    // Same embedding as the deploy-collection bundle below: needed here so
-    // the mint app can compute the NftItem code cell hash and check/publish
-    // its TON Sources Registry verification (see shared/verifier-client.js).
-    ".tact": "text",
-    ".abi": "text",
-    ".boc": "binary",
-  },
 });
 console.log("Built mint app -> public/app.js");
 

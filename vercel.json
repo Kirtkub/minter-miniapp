@@ -6,8 +6,7 @@
     { "source": "/deploycollection/", "destination": "/deploycollection/index.html" }
   ],
   "functions": {
-    "api/verify-source.js": {
-      "includeFiles": "deploy-collection/contracts/**"
-    }
+    "api/deploy-notify.js": { "includeFiles": "deploy-collection/**" },
+    "api/mint-notify.js": { "includeFiles": "deploy-collection/**" }
   }
 }

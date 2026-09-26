@@ -13,7 +13,7 @@ import collectionInfoHandler from "../api/collection-info.js";
 import channelAccessHandler from "../api/channel-access.js";
 import welcomeMessageHandler from "../api/welcome-message.js";
 import mintNotifyHandler from "../api/mint-notify.js";
-import verifySourceHandler from "../api/verify-source.js";
+import deployNotifyHandler from "../api/deploy-notify.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
 const port = Number(process.env.PORT || 5000);
@@ -60,7 +60,7 @@ const server = createServer(async (req, res) => {
   if (requestPath === "/api/channel-access") return channelAccessHandler(req, responseAdapter(res));
   if (requestPath === "/api/welcome-message") return welcomeMessageHandler(req, responseAdapter(res));
   if (requestPath === "/api/mint-notify") return mintNotifyHandler(req, responseAdapter(res));
-  if (requestPath === "/api/verify-source") return verifySourceHandler(req, responseAdapter(res));
+  if (requestPath === "/api/deploy-notify") return deployNotifyHandler(req, responseAdapter(res));
 
   const relative = normalize(HTML_FALLBACKS[requestPath] || requestPath);
   const filePath = join(root, relative);

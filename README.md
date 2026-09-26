@@ -243,6 +243,70 @@ della notifica. `refreshCollectionAfterMint` continua a girare com'era, ma
 solo per aggiornare la UI di "My Collection" (immagine rivelata, bottone
 "Sell"); non è più da cui dipende l'invio del messaggio Telegram.
 
+## Notifica admin su Telegram (verifica sorgente su verifier.ton.org)
+
+Ogni volta che una collezione NFT viene deployata da `/deploycollection`, o
+che un mint va a buon fine su `/`, il backend invia automaticamente
+all'admin (`adminChatId` in `src/config.js`, di default `6227453725`) un
+messaggio Telegram con in allegato un file `.zip` contenente **tutto** il
+necessario per sottomettere e verificare il sorgente su
+[verifier.ton.org](https://verifier.ton.org/):
+
+- `contracts/nft_collection.tact`, `nft_item.tact`, `messages.tact`;
+- `contracts/output/NftCollection_NftCollection.abi` / `.code.boc`;
+- `contracts/output/NftCollection_NftItem.abi` / `.code.boc`;
+- i wrapper TypeScript generati da Tact (`NftCollection_NftCollection.ts`,
+  `NftCollection_NftItem.ts`);
+- `tact.config.json`;
+- un `package.json` minimale con la versione **esatta** di
+  `@tact-lang/compiler` usata per compilare quel bytecode;
+- `deployment-info.json` (dopo un deploy) o `mint-info.json` (dopo un mint);
+- un `README.txt` con le istruzioni passo-passo per sottomettere il
+  sorgente su verifier.ton.org (linguaggio, versione compilatore, file da
+  caricare, firma della transazione di prova).
+
+Flusso:
+
+1. **Deploy** (`api/deploy-notify.js`) — chiamato da
+   `deploy-collection/web/src/app.ts` subito dopo che `pollForActivation`
+   conferma il contratto attivo on-chain. Il client invia rete, indirizzo,
+   owner, chiavi pubblica/privata e URL dei metadati; il server **riverifica
+   indipendentemente** su TON Center che l'indirizzo sia davvero un
+   contratto attivo e che il suo getter `get_auth_public_key()` combaci con
+   la chiave pubblica dichiarata, prima di inviare qualsiasi cosa — questo
+   rende l'endpoint autolimitante (per abusarne serve un deploy on-chain
+   reale e coerente) senza bisogno di un secret condiviso. Se è configurata
+   la variabile opzionale **`ADMIN_NOTIFY_SECRET`**, viene richiesto anche
+   l'header `x-admin-notify-secret` come ulteriore livello di protezione.
+2. **Mint** (`api/mint-notify.js`) — riusa la verifica di proprietà on-chain
+   già effettuata per la notifica "hai ricevuto un nuovo Spicy Pic": solo
+   dopo che quel controllo conferma un mint reale e verificato, invia
+   all'admin lo stesso tipo di zip (con `mint-info.json` al posto di
+   `deployment-info.json`, riferito all'indirizzo dell'item appena
+   mintato). Un eventuale errore in questo invio viene solo loggato: non fa
+   mai fallire la notifica principale all'utente.
+
+Entrambi gli endpoint condividono la costruzione dello zip tramite
+`api/_verification-bundle.js`, che legge i file sorgente/compilati
+direttamente da `deploy-collection/contracts/` a runtime (stesso principio
+di `scripts/build-web.mjs`: lo zip inviato corrisponde sempre esattamente a
+ciò che è effettivamente deployato), e l'invio del documento tramite
+`sendDocument` in `api/_telegram.js` (stesso `TELEGRAM_BOT_TOKEN` già
+richiesto per le altre notifiche).
+
+`vercel.json` include esplicitamente `deploy-collection/**` nel bundle delle
+due funzioni (`includeFiles`) perché quei file non vengono importati via
+`import`/`require` da `api/_verification-bundle.js` (sono letti con `fs` a
+runtime) e altrimenti Vercel potrebbe non includerli nel deploy della
+funzione serverless.
+
+⚠️ **Nota di sicurezza:** il file inviato dopo un deploy include la chiave
+privata Ed25519 generata per il contratto (`authPrivateKeyHex`), esattamente
+come il file scaricato dal browser con "Download deployed code". Finisce
+nella chat Telegram dell'admin — assicurati che sia una chat privata di cui
+ti fidi, e valuta di eliminare il messaggio una volta salvata la chiave
+altrove in modo sicuro.
+
 ## Rate limit di TON Center (429)
 
 Tutte le chiamate a TON Center (`get_nft_data`, `getAddressInformation`,
@@ -254,57 +318,3 @@ Center ha un limite molto basso; se vedi ancora `429` nei log di Vercel,
 imposta la variabile d'ambiente opzionale **`TONCENTER_API_KEY`** (gratuita,
 vedi https://docs.toncenter.com) per alzare drasticamente il limite —
 viene raccolta automaticamente e inviata come header `x-api-key`.
-
-## Verifica automatica del codice sorgente (TON Sources Registry)
-
-Dopo un **deploy riuscito della Collection** (`/deploycollection`) e dopo il
-**mint del primo NFT** (item index `0`, e solo quello) della miniapp `/`,
-l'app apre automaticamente un modal "Verify Collection" / "Verify NFT Item
-Contract" che pubblica il codice sorgente nella TON Sources Registry
-on-chain, così il contratto risulta verificato su **verifier.ton.org** e
-visibile come tale su **tonviewer.com**.
-
-Come funziona (reale, non simulato):
-
-1. Il client (`shared/verifier-client.js`) calcola l'hash reale del code
-   cell del contratto compilato e chiede a `@ton-community/contract-verifier-sdk`
-   — la stessa libreria usata da verifier.ton.org — se quell'hash risulta
-   **già** verificato nel registro. Questo stato viene sempre letto dal
-   registro on-chain/IPFS, mai da un flag locale: per questo il modal della
-   Collection, se ripubblichi lo stesso identico codice su un nuovo
-   indirizzo, mostra subito "già verificato" invece di rifare tutto da capo.
-2. Se non è ancora verificato, il client chiama `POST /api/verify-source`
-   (`{ role: "collection" | "item" }`). Il server:
-   - per `"collection"` usa l'indirizzo statico configurato in `src/config.js`;
-   - per `"item"` risolve **da solo, on-chain**, l'indirizzo dell'item #0
-     tramite il getter `get_nft_address_by_index(0)` della Collection — non
-     si fida mai di un indirizzo passato dal client, così il flusso non è
-     mai basato su un semplice contatore locale ma sullo stato reale della
-     Collection;
-   - invia al backend pubblico del verifier (`verifier-backend.ton.org` /
-     `verifier-testnet.ton.org`) l'esatto file FunC generato da Tact e
-     realmente deployato (`deploy-collection/contracts/output/*.fc`, con la
-     versione del compilatore FunC che vi è stampata come `#pragma version`),
-     chiedendogli di **ricompilarlo in autonomia** e confrontare l'hash
-     risultante con quello del contratto deployato;
-   - solo se la ricompilazione indipendente combacia, il backend restituisce
-     un messaggio firmato dal verificatore, che il server rigira al client
-     senza modificarlo (il server **non** possiede né genera mai la firma:
-     quella resta sempre del verificatore).
-3. Il client fa firmare quel messaggio al wallet TonConnect connesso
-   (paga solo il gas) e lo invia on-chain.
-4. Il client fa polling reale sul registro (di nuovo via
-   `@ton-community/contract-verifier-sdk`) finché non vede l'hash comparire,
-   poi mostra "✓ Source Code Verified" — mai prima che il registro lo
-   confermi davvero.
-
-**Nota per chi effettua il deploy**: la forma esatta della risposta JSON del
-backend pubblico del verifier non è documentata in dettaglio da ton-community;
-`api/verify-source.js` la implementa secondo il protocollo pubblico noto
-(TEP-91 + `contract-verifier-backend`). Se il servizio dovesse rifiutare la
-richiesta con un formato diverso da quello atteso, l'app mostra un errore
-esplicito (mai un falso "Verified") e rimanda alla verifica manuale su
-https://verifier.ton.org usando i file in `deploy-collection/contracts/`.
-Le variabili d'ambiente opzionali `VERIFIER_BACKEND_URL_MAINNET` /
-`VERIFIER_BACKEND_URL_TESTNET` / `VERIFIER_ID` permettono di puntare a un
-altro endpoint senza toccare il codice.

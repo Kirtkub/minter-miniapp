@@ -144,19 +144,6 @@
     .mint-result-box.error #mint-result-close { background: #e5484d; }
     .mint-result-box.error #mint-result-close:active { background: #cf3f44; }
 
-    /* --- Verify NftItem modal (first mint of the Collection only) -------- */
-    #verify-item-modal { position: fixed; inset: 0; z-index: 96; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); padding: 24px; }
-    #verify-item-modal[hidden] { display: none; }
-    .verify-item-box { width: min(100%, 420px); background: #121212; border: 1px solid #262626; border-radius: 20px; padding: 24px; }
-    .verify-item-box h3 { margin: 0 0 8px; color: #30A1F5; font-size: 17px; }
-    #verify-item-modal.verified .verify-item-box h3::before { content: "✓ "; }
-    .verify-item-hint { margin: 0 0 10px; color: #b5b5b5; font-size: 13px; line-height: 1.5; }
-    .verify-item-actions { display: flex; gap: 10px; margin-top: 8px; }
-    #verify-item-button { flex: 1; padding: 14px 16px; background: #30A1F5; border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 700; }
-    #verify-item-button:active { background: #2790dd; }
-    #verify-item-button:disabled { background: #2a2a2a; color: #7a7a7a; }
-    .verify-item-secondary { padding: 14px 16px; background: none; border: 1px solid #3a3a3a; border-radius: 12px; color: #cfcfcf; font-size: 15px; }
-
     #auth-status-btn {
       position: fixed;
       top: max(12px, env(safe-area-inset-top));
@@ -480,22 +467,6 @@
     <div id="mint-result-box" class="mint-result-box">
       <p id="mint-result-text"></p>
       <button id="mint-result-close" type="button">OK</button>
-    </div>
-  </div>
-
-  <!-- Verify NftItem modal: opens automatically the first time item #0 of
-       the Collection is minted, so its source code can be published to the
-       TON Sources Registry (verifier.ton.org / tonviewer.com). Never shown
-       again for any later mint. -->
-  <div id="verify-item-modal" hidden>
-    <div class="verify-item-box">
-      <h3>Verify NFT Item Contract</h3>
-      <p class="verify-item-hint">This was the first NFT minted from this Collection. Its NftItem contract code can now be published to the TON Sources Registry, so it shows up as verified on <strong>verifier.ton.org</strong> and <strong>tonviewer.com</strong>.</p>
-      <p id="verify-item-status" class="verify-item-hint"></p>
-      <div class="verify-item-actions">
-        <button id="verify-item-button" type="button">Verify &amp; Publish Source Code</button>
-        <button id="verify-item-close" type="button" class="verify-item-secondary">Close</button>
-      </div>
     </div>
   </div>
   <main>

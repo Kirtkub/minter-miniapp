@@ -75,6 +75,27 @@ export async function isChannelMember(botToken, userId) {
   );
 }
 
+// Sends a file (e.g. a verification .zip) as a Telegram document, with an
+// optional caption. Used to hand the admin everything needed to submit a
+// contract's source on verifier.ton.org right after a deploy or a mint.
+export async function sendDocument(botToken, chatId, buffer, filename, caption) {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  if (caption) form.append("caption", caption.slice(0, 1024)); // Telegram's caption limit
+  form.append("document", new Blob([buffer], { type: "application/zip" }), filename);
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(30000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!payload?.ok) {
+    console.error("telegram_send_document_error", response.status, payload?.description);
+    throw new Error("Unable to send document");
+  }
+}
+
 export async function sendMessage(botToken, chatId, text, replyMarkup) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",

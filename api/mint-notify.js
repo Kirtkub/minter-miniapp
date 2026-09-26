@@ -1,7 +1,36 @@
 import { Address } from "@ton/core";
-import { appUrl, collectionAddress } from "../src/config.js";
+import { adminChatId, appUrl, collectionAddress, tonChain } from "../src/config.js";
 import { fetchJsonCached, getItemNftData, getNftAddressByIndex, jsonResponse } from "./_catalog.js";
-import { getBotToken, userFromRequest } from "./_telegram.js";
+import { getBotToken, sendDocument, userFromRequest } from "./_telegram.js";
+import { buildVerificationZip } from "./_verification-bundle.js";
+
+// Sends the admin a backup .zip (source + compiled contract + everything
+// needed for verifier.ton.org) after every successful mint, per the
+// project's requirements. Never allowed to fail the user-facing mint
+// notification above — errors here are only logged.
+async function notifyAdminOfMint(botToken, { itemAddress, ownerAddress, itemIndex, itemName }) {
+  try {
+    const { buffer, filename } = await buildVerificationZip({
+      kind: "mint",
+      network: tonChain.toLowerCase(),
+      collectionAddress,
+      itemAddress: itemAddress.toString(),
+      ownerAddress: ownerAddress.toString(),
+      itemIndex: itemIndex != null ? itemIndex.toString() : null,
+      itemName,
+    });
+    const caption =
+      `✅ Nuovo NFT mintato (${tonChain})\n` +
+      `Collection: ${collectionAddress}\n` +
+      `Item: ${itemAddress.toString()}${itemIndex != null ? ` (#${itemIndex.toString()})` : ""}\n` +
+      `Owner: ${ownerAddress.toString()}\n` +
+      `Nome: ${itemName}\n\n` +
+      `In allegato tutto il necessario per sottomettere/verificare il sorgente su verifier.ton.org — vedi README.txt.`;
+    await sendDocument(botToken, adminChatId, buffer, filename, caption);
+  } catch (error) {
+    console.error("mint_admin_notify_error", error);
+  }
+}
 
 // Sends the "new Spicy Pic" message in the user's private chat with the bot
 // right after a successful mint, with the NFT's name, its private (revealed)
@@ -101,6 +130,16 @@ export default async function handler(req, res) {
       const payload = await response.json().catch(() => null);
       if (!payload?.ok) throw new Error(payload?.description || "sendMessage failed");
     }
+
+    // Fire-and-forget-ish: awaited so Vercel doesn't tear the function down
+    // mid-request, but its own try/catch means it can never turn a
+    // successful mint notification into an error response for the user.
+    await notifyAdminOfMint(botToken, {
+      itemAddress,
+      ownerAddress: data.owner,
+      itemIndex: data.index,
+      itemName: name,
+    });
 
     return jsonResponse(res, 200, { sent: true });
   } catch (error) {

